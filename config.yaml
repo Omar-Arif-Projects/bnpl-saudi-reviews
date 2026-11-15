@@ -79,8 +79,61 @@ trends:
   # Both English words also have other meanings (a cat breed, a first name).
   excluded_terms: ["Tabby", "Tamara"]
 
+cleaning:
+  repeat_max: 2              # حلووووو -> حلوو (keep 2 so emphasis is still visible)
+  min_letters: 2             # reviews with fewer letters AND no emoji are dropped ("ok" stays)
+  # Kept for EDA but not used to train text models (decision 2026-11-15).
+  exclude_from_training: ["emoji_only"]
+  language:
+    mixed_min_share: 0.2     # smaller script must be >= 20% of words to count as mixed
+    arabizi_min_tokens: 2    # Arabizi hits needed, so one "inshallah" stays English
+    brand_terms: ["tabby", "tamara", "تابي", "تمارا", "تابى"]
+    # Common Gulf Arabizi words (lowercase). Digit spellings (7lw, ya3ni) are
+    # caught by pattern; this list adds words written without digits.
+    # Phrases English-speaking users also write (mashallah, inshallah,
+    # alhamdulillah, shukran, wallah, yalla, khalas) are deliberately NOT listed:
+    # they made English reviews look like Arabizi.
+    arabizi_words: [
+      "7lw", "7elw", "helw", "hilw", "7lo", "mara", "marra", "wayed", "wajed", "wa9ed",
+      "zain", "zein", "zeen", "ya3ni", "yaani", "ya3ny", "bas", "msh",
+      "mish", "mo", "mu", "kthir", "kteer", "ktheer", "3ndi", "3endi", "3ala", "3la",
+      "hatha", "hadha", "hada", "haza", "tatbeeq", "tatbeq", "barnamaj", "ahsan", "afdal",
+      "ana", "enta", "inta", "lil", "ma3", "m3", "7ata", "wala", "lazem", "laazim",
+    ]
+
+labels:
+  # Star rating -> sentiment (weak labels; also used to group reviews in EDA).
+  star_to_sentiment: {1: "negative", 2: "negative", 3: "neutral", 4: "positive", 5: "positive"}
+
+eda:
+  min_term_count: 30         # a word / bigram must appear this often to be ranked
+  top_n_terms: 15
+  log_odds_prior: 0.01       # Dirichlet prior strength (share of background counts)
+  # Words with no opinion content, in NORMALIZED form (ة->ه, ى->ي, no hamza on alef).
+  # English uses scikit-learn's stop-word list plus the extras below.
+  stopwords_ar: [
+    "في", "من", "علي", "الي", "عن", "مع", "و", "او", "ثم", "ان", "انه", "انها", "لا", "ما",
+    "لم", "لن", "هو", "هي", "هم", "انا", "انت", "انتم", "نحن", "هذا", "هذه", "ذلك", "تلك",
+    "اللي", "الذي", "التي", "كل", "كان", "كانت", "يكون", "قد", "لقد", "به", "بها", "له", "لها",
+    "لي", "لك", "لكم", "لنا", "فيه", "فيها", "عند", "عندي", "حتي", "اذا", "لو", "بس", "يا",
+    "هل", "ولا", "وما", "وان", "الا", "بعد", "قبل", "عشان", "لان", "شي", "ايش", "وش",
+    "كذا", "كمان", "يعني", "انو", "اني", "منه", "منها", "عليه", "عليها", "وهو", "وهي", "وفي",
+    "ومن", "فقط", "ايضا", "جدا", "الله", "تابي", "تمارا", "تطبيق", "التطبيق", "البرنامج", "برنامج",
+  ]
+  stopwords_en_extra: ["app", "tabby", "tamara", "application", "im", "dont", "it's", "i'm", "don't", "use", "using"]
+
+viz:
+  colors: {tabby: "#2a78d6", tamara: "#eb6834"}   # colorblind-checked pair; same in every chart
+  surface: "#fcfcfb"
+  ink: "#0b0b0b"
+  muted: "#52514e"
+  grid: "#e1e0d9"
+  baseline: "#c3c2b7"
+
 paths:
   raw: "data/raw"
+  reviews_clean: "data/processed/reviews_clean.parquet"
+  cleaning_log: "reports/cleaning_log.csv"
   processed: "data/processed"
   labeled: "data/labeled"
   external: "data/external"

@@ -189,10 +189,10 @@ def plot_time(df: pd.DataFrame, cfg: dict[str, Any], out_path: Path) -> None:
     fig.patch.set_facecolor("#fcfcfb")
     ax.set_facecolor("#fcfcfb")
     for key, color in colors.items():
-        # Matplotlib does not shape Arabic (letters render unjoined, left to right),
-        # so the Arabic terms are described in the caption instead of drawn.
+        # matplotlib >= 3.11 lays out Arabic correctly from plain text.
         name = cfg["apps"][key]["display_name"]
-        ax.plot(full["month"], full[key], color=color, linewidth=2, label=name)
+        term = cfg["trends"]["terms"][key]
+        ax.plot(full["month"], full[key], color=color, linewidth=2, label=f"{name}: {term}")
         last = full.iloc[-1]
         ax.annotate(
             f"{name} {last[key]:.0f}", (last["month"], last[key]),
@@ -216,7 +216,7 @@ def plot_time(df: pd.DataFrame, cfg: dict[str, Any], out_path: Path) -> None:
     fig.text(
         0.01, 0.01,
         f"Source: Google Trends, manual export {t['downloaded_on']}. 100 = peak across both terms. "
-        "Searches for the Arabic app names only. Partial current month excluded.",
+        "Arabic search terms only. Partial current month excluded.",
         fontsize=7.5, color=muted,
     )
     fig.tight_layout(rect=(0, 0.03, 0.97, 1))

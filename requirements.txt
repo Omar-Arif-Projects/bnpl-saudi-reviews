@@ -5,7 +5,14 @@ pandas>=2.2
 numpy>=1.26
 pyarrow>=15.0
 pyyaml>=6.0
-matplotlib>=3.8
+# 3.11+ lays out Arabic text correctly in charts (checked on 3.11.2)
+matplotlib>=3.11
+
+# Phase 2: cleaning and EDA
+emoji>=2.10
+scikit-learn>=1.4
+jupyter>=1.0
+ipykernel>=6.29
 
 # Dev / tests
 pytest>=8.0

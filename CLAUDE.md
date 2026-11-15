@@ -80,13 +80,26 @@ _Last updated: 2026-11-15_
   - App Store RSS: 500 per app (recent only), avg 3.7 (Tabby) / 3.1 (Tamara). The feed is sometimes empty; re-run if so.
 - SAMA POS / mada e-commerce data from KAPSARC (`src/collect/sama_kapsarc.py`): long CSV + monthly wide file from Jan 2019 (91 months, sales in million SAR, derived `ecom_avg_ticket_sar`, `ecom_share_of_card_spending`). mada e-commerce excludes Visa/Mastercard/credit cards.
 - Google Trends exports added by Omar: `trends_time.csv` (monthly, Dec 2018 to Nov 2026) and `trends_region.csv` (13 regions), **Arabic terms only** ("تابي", "تمارا"). Settings are recorded in `config.yaml` → `trends` (SA, All categories, Web Search, downloaded 2026-11-15). The English terms were deliberately excluded because Omar's four-term comparison showed far less search interest for them.
-- `src/collect/google_trends.py` cleans these into `data/processed/trends_time.parquet` / `trends_region.parquet` and saves `reports/figures/trends_interest_over_time.png`. Matplotlib can't draw Arabic correctly (letters come out unjoined, left to right), so keep Arabic out of static chart text. "تمارا" is also a first name, so Trends for Tamara has some unrelated interest.
+- `src/collect/google_trends.py` cleans these into `data/processed/trends_time.parquet` / `trends_region.parquet` and saves `reports/figures/trends_interest_over_time.png`. "تمارا" is also a first name, so Trends for Tamara has some unrelated interest.
 
-**Open items before / during Phase 2:**
-1. `data/external/events.csv` has headers only (`date,event,category,app,source_url`). Fill it with sourced events (SAMA BNPL rules, licenses, funding rounds, limit changes, Ramadan / White Friday dates). Every row needs a real source URL; never fill from memory. Not blocking until Phase 5.
-2. Phase 2 note: the `en` Play Store query bucket likely contains Arabic text (Google's language filter is loose), so language tagging must use the text, not `lang_query`. Dedup is already by `review_id` across languages.
+**Phase 2 (cleaning and EDA): done.**
+- `python -m src.clean.pipeline` → `data/processed/reviews_clean.parquet` (183,341 Google Play + 982 App Store rows) and `reports/cleaning_log.csv`. Only 2 double submissions and 176 no-content rows were removed. Repeated text is NOT a duplicate (many people write "جيد").
+- Columns added: `text_norm, emojis, n_emoji, lang, n_letters, n_chars, n_words, is_emoji_only, trainable`. Settings are in `config.yaml` → `cleaning`. Star → sentiment mapping is in `labels`.
+- **Decision (Omar):** emoji-only reviews are kept for EDA, excluded from training (`trainable = False`).
+- Language from text: Arabic 50%, English 47%, emoji-only 2.6%, mixed 0.1%, **Arabizi 0**. The word list must not include loan phrases (mashallah, inshallah, ...): they made English reviews look like Arabizi. The `en` bucket is 95% English.
+- EDA: `src/analysis/eda.py` (tables), `src/analysis/plots.py` (shared style; app colors in `config.yaml` → `viz`), `notebooks/02_eda.ipynb`, figures `reports/figures/eda_*.png`. The notebook is generated and executed with nbconvert; outputs are committed.
+- **Charts and Arabic:** matplotlib 3.11+ renders Arabic correctly from plain text. Do NOT use arabic-reshaper / python-bidi, which reverses it. (An earlier note said matplotlib couldn't draw Arabic; that was wrong.)
+- Key findings:
+  - 85% of reviews are 5 stars; the median positive review is 2 words, the median 1-star review 12–13 words.
+  - **Tamara, Feb 2026:** positive reviews fell about 90% (2,175 → 189 a month), negative reviews about 35% (113 → 72). The rating drop to 3.9 is mostly a change in who reviews, so Phase 5 must show complaint counts next to any share-based index.
+  - **Tabby:** a negative spike in Jul–Aug 2026 (371 / 562 vs. about 150–230 normally).
+  - Both apps reply to about 90% of 1–2 star reviews. Tabby replies to positive reviews too, since 2024 (98% of all reviews in 2026). Median reply time: Tamara 0.8 h, Tabby 22 h.
+  - Top complaints: customer service (both); update / white screen, blocked card (Tabby); late fees, first payment (Tamara).
 
-**Next:** Phase 2 (cleaning and EDA): `src/clean/normalize.py`, `src/clean/language.py`, dedup/short-review filtering with a removal log, then `02_eda.ipynb`. Early EDA lead: Tabby replies to ~half its reviews vs. Tamara ~11%.
+**Open items:**
+1. `data/external/events.csv` has headers only (`date,event,category,app,source_url`). Fill it with sourced events (SAMA BNPL rules, licenses, funding rounds, limit changes, Ramadan / White Friday dates). Also look for events behind Tamara Feb 2026 and Tabby Jul–Aug 2026. Every row needs a real source URL; never fill from memory. Not blocking until Phase 5.
+
+**Next:** Phase 3 (sentiment modeling). Start with the gold-set labeling helper. Over-sample negative and neutral reviews and include both Arabic and English. The models need to handle English too (about 47% of reviews), and CAMeLBERT covers Arabic only.
 
 ## Phases
 
