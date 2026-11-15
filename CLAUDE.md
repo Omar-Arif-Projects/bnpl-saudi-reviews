@@ -70,8 +70,7 @@ _Last updated: 2026-11-15_
 
 **Repo:** https://github.com/Omar-Arif-Projects/bnpl-saudi-reviews (public, branch `main`). Local folder was renamed from `test` to `bnpl-saudi-reviews`.
 
-**Environment to-do:** `.venv` was deleted before the folder rename and must be rebuilt:
-`py -3.12 -m venv .venv` then `.venv\Scripts\python -m pip install -r requirements.txt`. Run scripts as modules from the project root (`python -m src.collect.play_store`). Use `PYTHONIOENCODING=utf-8` when printing Arabic in the terminal. GitHub CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (logged in as Omar-Arif-Projects).
+**Environment:** `.venv` rebuilt 2026-11-15 with Python 3.12 (`py -3.12 -m venv .venv`, then `.venv\Scripts\python -m pip install -r requirements.txt`). Run scripts as modules from the project root (`python -m src.collect.play_store`). Use `PYTHONIOENCODING=utf-8` when printing Arabic in the terminal. GitHub CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` (logged in as Omar-Arif-Projects).
 
 **Phase 1 (data collection): mostly done.**
 - Verified app IDs (in `config.yaml`): Play `app.tabby.client` (not `app.tabby.cashier` = Tabby Business), `co.tamara.user`; Apple `1528022364`, `1533512531`.
@@ -80,14 +79,14 @@ _Last updated: 2026-11-15_
   - Google Play Tamara: ar 39,599 / en 24,460 (Apr 2021 to Nov 2026), avg 4.6–4.7 stars, dev reply rate ~11%
   - App Store RSS: 500 per app (recent only), avg 3.7 (Tabby) / 3.1 (Tamara). The feed is sometimes empty; re-run if so.
 - SAMA POS / mada e-commerce data from KAPSARC (`src/collect/sama_kapsarc.py`): long CSV + monthly wide file from Jan 2019 (91 months, sales in million SAR, derived `ecom_avg_ticket_sar`, `ecom_share_of_card_spending`). mada e-commerce excludes Visa/Mastercard/credit cards.
-- Google Trends exports added by Omar: `trends_time.csv` (monthly from Dec 2018) and `trends_region.csv`, **Arabic terms only** ("تابي", "تمارا").
+- Google Trends exports added by Omar: `trends_time.csv` (monthly, Dec 2018 to Nov 2026) and `trends_region.csv` (13 regions), **Arabic terms only** ("تابي", "تمارا"). Settings are recorded in `config.yaml` → `trends` (SA, All categories, Web Search, downloaded 2026-11-15). The English terms were deliberately excluded because Omar's four-term comparison showed far less search interest for them.
+- `src/collect/google_trends.py` cleans these into `data/processed/trends_time.parquet` / `trends_region.parquet` and saves `reports/figures/trends_interest_over_time.png`. Matplotlib can't draw Arabic correctly (letters come out unjoined, left to right), so keep Arabic out of static chart text. "تمارا" is also a first name, so Trends for Tamara has some unrelated interest.
 
 **Open items before / during Phase 2:**
-1. `data/external/events.csv` has headers only (`date,event,category,app,source_url`). Fill it with sourced events (SAMA BNPL rules, licenses, funding rounds, limit changes, Ramadan / White Friday dates). Every row needs a real source URL; never fill from memory.
-2. Optional: Google Trends for the English terms "Tabby" / "Tamara" (manual export by Omar).
-3. Phase 2 note: the `en` Play Store query bucket likely contains Arabic text (Google's language filter is loose), so language tagging must use the text, not `lang_query`. Dedup is already by `review_id` across languages.
+1. `data/external/events.csv` has headers only (`date,event,category,app,source_url`). Fill it with sourced events (SAMA BNPL rules, licenses, funding rounds, limit changes, Ramadan / White Friday dates). Every row needs a real source URL; never fill from memory. Not blocking until Phase 5.
+2. Phase 2 note: the `en` Play Store query bucket likely contains Arabic text (Google's language filter is loose), so language tagging must use the text, not `lang_query`. Dedup is already by `review_id` across languages.
 
-**Next:** Phase 2 (cleaning and EDA). Early EDA lead: Tabby replies to ~half its reviews vs. Tamara ~11%.
+**Next:** Phase 2 (cleaning and EDA): `src/clean/normalize.py`, `src/clean/language.py`, dedup/short-review filtering with a removal log, then `02_eda.ipynb`. Early EDA lead: Tabby replies to ~half its reviews vs. Tamara ~11%.
 
 ## Phases
 

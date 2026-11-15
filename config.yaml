@@ -53,9 +53,31 @@ kapsarc:
     "POS Transactions Using Near Field Communication Technology : Sales (In Thousand Riyals) : Sales Using Mobile": nfc_mobile_sales_m_sar
 
 trends:
-  start_date: "2020-01-01"
-  geo: "SA"
-  terms: ["تابي", "تمارا", "Tabby", "Tamara"]
+  # MANUAL DOWNLOADS from https://trends.google.com/explore (no API, no scraper).
+  # src/collect/google_trends.py only cleans these files.
+  source: "manual export, Google Trends Explore"
+  downloaded_on: "2026-11-15"
+  geo: "SA"                    # Saudi Arabia, whole country
+  # App key -> search term exactly as typed. Both terms were compared in ONE
+  # query, so the 0-100 index is shared (100 = peak across both).
+  terms:
+    tabby: "تابي"
+    tamara: "تمارا"
+  # The time-series export starts at 2018-12-01 with monthly rows and ends at the
+  # partial month 2026-11.
+  time_range_in_file: "2018-12-01 to 2026-11-01"
+  resolution: "monthly"
+  # Not stored in the export files; confirmed by Omar from the Trends UI (2026-11-15).
+  category: "All categories"
+  search_property: "Web Search"
+  exports:
+    - "trends_time.csv (Interest over time)"
+    - "trends_region.csv (Interest by subregion, 13 regions)"
+  # English terms ("Tabby", "Tamara") were deliberately NOT used. Omar compared all
+  # four terms in one Trends query (2026-11-15): the English names were searched far
+  # less than the Arabic ones (visual check; that comparison was not exported).
+  # Both English words also have other meanings (a cat breed, a first name).
+  excluded_terms: ["Tabby", "Tamara"]
 
 paths:
   raw: "data/raw"
@@ -66,4 +88,9 @@ paths:
   events: "data/external/events.csv"
   sama_long: "data/external/sama_pos_ecommerce.csv"
   sama_wide_monthly: "data/external/sama_pos_ecommerce_monthly_wide.csv"
+  trends_time_raw: "data/external/trends_time.csv"
+  trends_region_raw: "data/external/trends_region.csv"
+  trends_time: "data/processed/trends_time.parquet"
+  trends_region: "data/processed/trends_region.parquet"
+  trends_figure: "reports/figures/trends_interest_over_time.png"
   logs: "logs"
