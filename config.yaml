@@ -1,0 +1,69 @@
+# Central configuration for the BNPL Saudi reviews project.
+# All scripts read paths, IDs and parameters from here. No hard-coded values in code.
+
+project:
+  random_seed: 42
+
+apps:
+  tabby:
+    display_name: "Tabby"
+    # Verified 2026-11-15: https://play.google.com/store/apps/details?id=app.tabby.client
+    # ("Tabby: Send, spend and save"). Not app.tabby.cashier, which is "Tabby Business".
+    play_store_id: "app.tabby.client"
+    # Verified via itunes.apple.com/lookup (seller: Tabby FZ LLC, bundleId app.tabby.client)
+    app_store_id: "1528022364"
+  tamara:
+    display_name: "Tamara"
+    # Verified 2026-11-15: linked from https://tamara.co/en/app (official site)
+    play_store_id: "co.tamara.user"
+    # Verified via itunes.apple.com/lookup (seller: Tamara FZE, bundleId co.tamara)
+    app_store_id: "1533512531"
+
+collection:
+  country: "sa"
+  languages: ["ar", "en"]
+  play_store:
+    batch_size: 200          # reviews per request (library maximum is ~200)
+    sleep_seconds: 1.5       # polite delay between requests
+    max_retries: 3
+    retry_backoff_seconds: 10
+    max_reviews_per_lang: null   # null = everything available; set an int for quick tests
+  app_store:
+    enabled: true
+    max_pages: 10            # Apple RSS exposes at most 10 pages x 50 reviews (recent only)
+    sleep_seconds: 1.5
+
+kapsarc:
+  # SAMA point-of-sale and mada e-commerce statistics, republished by KAPSARC.
+  base_url: "https://data.kapsarc.org/api/explore/v2.1/catalog/datasets"
+  dataset_id: "pos-transactions"
+  timeout_seconds: 60
+  wide_start: "2019-01-01"     # wide monthly file keeps the BNPL era only
+  # Raw SAMA indicator name (whitespace-normalized) -> short column name.
+  # Columns ending in _m_sar are converted from thousands to millions of SAR.
+  indicators:
+    "Total POS : Number of Points of Sale Terminals": pos_terminal_count
+    "Total POS : Number of Transactions": pos_txn_count
+    "Total POS : Sales (In Thousand Riyals)": pos_sales_m_sar
+    "E-Commerce Transactions Using Mada Cards : Number of Transactions": ecom_mada_txn_count
+    "E-Commerce Transactions Using Mada Cards : Sales (In Thousand Riyals)": ecom_mada_sales_m_sar
+    "POS Transactions Using Near Field Communication Technology : Number of Transactions : Cards Transactions": nfc_card_txn_count
+    "POS Transactions Using Near Field Communication Technology : Number of Transactions : Mobile Transactions": nfc_mobile_txn_count
+    "POS Transactions Using Near Field Communication Technology : Sales (In Thousand Riyals) : Sales Using Cards": nfc_card_sales_m_sar
+    "POS Transactions Using Near Field Communication Technology : Sales (In Thousand Riyals) : Sales Using Mobile": nfc_mobile_sales_m_sar
+
+trends:
+  start_date: "2020-01-01"
+  geo: "SA"
+  terms: ["تابي", "تمارا", "Tabby", "Tamara"]
+
+paths:
+  raw: "data/raw"
+  processed: "data/processed"
+  labeled: "data/labeled"
+  external: "data/external"
+  figures: "reports/figures"
+  events: "data/external/events.csv"
+  sama_long: "data/external/sama_pos_ecommerce.csv"
+  sama_wide_monthly: "data/external/sama_pos_ecommerce_monthly_wide.csv"
+  logs: "logs"

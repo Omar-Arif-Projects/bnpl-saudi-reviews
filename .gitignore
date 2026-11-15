@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# Data: raw scraped data is never committed
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/sample_*.csv
+
+# Logs, models, caches
+logs/
+models/
+*.pt
+*.bin
+*.safetensors
+.cache/
+
+# Environment / IDE
+.env
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Flutter build output
+dashboard/build/
+dashboard/.dart_tool/
