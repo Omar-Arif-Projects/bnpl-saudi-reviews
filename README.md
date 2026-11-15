@@ -24,8 +24,8 @@ An analysis of public app-store reviews of **Tabby** and **Tamara**, Saudi Arabi
 | Source | App IDs | Coverage | Notes |
 |---|---|---|---|
 | Google Play (`google-play-scraper`) | `app.tabby.client`, `co.tamara.user` | Full available history, country `sa`, languages `ar` + `en` | Main dataset |
-| Apple App Store public RSS | `1528022364`, `1533512531` | Most recent reviews only (max 500 per app) | Optional, labelled `source = app_store_rss`; not comparable in volume. In Nov 2026 the SA feed returned no reviews for Tabby |
-| Google Trends (manual CSV export) | "تابي", "تمارا", "Tabby", "Tamara" | Saudi Arabia, 2020 to present | Downloaded by hand from trends.google.com into `data/external/` |
+| Apple App Store public RSS | `1528022364`, `1533512531` | Most recent reviews only (max 500 per app) | Optional, labelled `source = app_store_rss`; not comparable in volume. The feed is occasionally empty, so re-run if a pull returns nothing |
+| Google Trends (manual CSV export) | "تابي", "تمارا" | Saudi Arabia, monthly from Dec 2018 (`trends_time.csv`) and by region (`trends_region.csv`) | Downloaded by hand from trends.google.com into `data/external/`. Values are relative interest (0–100), not search counts |
 | SAMA payments statistics via [KAPSARC](https://data.kapsarc.org) | dataset `pos-transactions` | Monthly, Jan 2019 onward in the wide file | POS and mada e-commerce sales and transactions, as macro context for BNPL growth |
 | Events timeline | n/a | n/a | Hand-made `data/external/events.csv` with a source URL for every row |
 

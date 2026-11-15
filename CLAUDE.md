@@ -129,3 +129,4 @@ bnpl-saudi-reviews/
 - Set random seeds everywhere for reproducibility.
 - Notebooks call functions from `src/`; heavy logic lives in `src/`, not in notebooks.
 - Each phase ends with a short entry in `README.md` or `reports/` and a clean commit.
+- Commits: author is Omar (GitHub noreply email). Do not add Claude as a co-author or any "Co-Authored-By" / "Generated with" lines to commits or PRs.

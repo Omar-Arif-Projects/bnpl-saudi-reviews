@@ -32,7 +32,7 @@ def collection_summary(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         Summary table.
     """
-    return (
+    summary = (
         df.assign(lang_query=df["lang_query"].fillna("n/a"))
         .groupby(["source", "app", "lang_query"])
         .agg(
@@ -43,5 +43,7 @@ def collection_summary(df: pd.DataFrame) -> pd.DataFrame:
             reply_rate=("has_reply", "mean"),
             empty_text=("text", lambda s: (s.str.strip() == "").sum()),
         )
-        .round(3)
     )
+    numeric = ["mean_rating", "reply_rate"]
+    summary[numeric] = summary[numeric].astype(float).round(3)
+    return summary
