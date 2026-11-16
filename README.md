@@ -1,70 +1,77 @@
 # BNPL in Saudi Arabia: What Users Are Saying
 
-An analysis of public app-store reviews of **Tabby** and **Tamara**, Saudi Arabia's two biggest Buy Now, Pay Later apps. It covers data collection, Arabic NLP, sentiment and topic modeling, trends over time against real events, a served model, and a Flutter web dashboard.
+An analysis of 184,000 public app-store reviews of **Tabby** and **Tamara**, Saudi Arabia's two largest Buy Now, Pay Later apps, using Arabic and English NLP.
 
-> 🚧 Work in progress, built phase by phase. Live demo, key findings and model results will appear here.
+> **Status:** data collection, cleaning and exploratory analysis are complete. Sentiment models, topic modeling, the events analysis, an API and a web dashboard are in progress (see [Roadmap](#roadmap)).
 
-## Status
+## Key findings
 
-| Phase | Description | Status |
-|---|---|---|
-| 1 | Data collection | ✅ code done, data collected locally |
-| 2 | Cleaning and EDA | ✅ |
-| 3 | Sentiment modeling | ⏳ |
-| 4 | Topic modeling | ⏳ |
-| 5 | Trends and events | ⏳ |
-| 6 | API | ⏳ |
-| 7 | Flutter dashboard | ⏳ |
-| 8 | README and polish | ⏳ |
+From 183,341 Google Play reviews (Saudi Arabia, October 2020 to November 2026):
 
-## Phase 1: Data collection
-
-**Sources**
-
-| Source | App IDs | Coverage | Notes |
-|---|---|---|---|
-| Google Play (`google-play-scraper`) | `app.tabby.client`, `co.tamara.user` | Full available history, country `sa`, languages `ar` + `en` | Main dataset |
-| Apple App Store public RSS | `1528022364`, `1533512531` | Most recent reviews only (max 500 per app) | Optional, labelled `source = app_store_rss`; not comparable in volume. The feed is occasionally empty, so re-run if a pull returns nothing |
-| Google Trends (manual CSV export) | "تابي", "تمارا" | Saudi Arabia, monthly from Dec 2018 (`trends_time.csv`) and by region (`trends_region.csv`) | Downloaded by hand from trends.google.com into `data/external/` (All categories, Web Search, both terms in one query). Values are relative interest (0–100), not search counts. English names were far less searched and are not used |
-| SAMA payments statistics via [KAPSARC](https://data.kapsarc.org) | dataset `pos-transactions` | Monthly, Jan 2019 onward in the wide file | POS and mada e-commerce sales and transactions, as macro context for BNPL growth |
-| Events timeline | n/a | n/a | Hand-made `data/external/events.csv` with a source URL for every row |
-
-Package IDs were checked against the live store listings (Tabby's `app.tabby.cashier` is the separate *Tabby Business* app, so it is not used).
-
-**Fields kept:** review id, app, source, country, query language, text, star rating, review date, thumbs-up count, app version, whether the developer replied, and the reply date.
-**Never stored:** reviewer names, profile images, user IDs, or developer reply text.
-
-**SAMA payments data:** `python -m src.collect.sama_kapsarc` saves the full dataset (`sama_pos_ecommerce.csv`, long format) and a monthly wide file (`sama_pos_ecommerce_monthly_wide.csv`) starting January 2019. In the wide file, sales are in millions of SAR, columns have short names (e.g. `ecom_mada_sales_m_sar`, `ecom_mada_txn_count`, `pos_sales_m_sar`), and there are two derived columns: `ecom_avg_ticket_sar` (e-commerce sales / transactions) and `ecom_share_of_card_spending` (e-commerce / (e-commerce + POS) sales).
-> **Note:** the e-commerce series covers **mada debit cards only**. It excludes Visa, Mastercard and credit-card online spending, so it understates total online spending.
-
-**Google Trends:** `python -m src.collect.google_trends` cleans the two manual exports into `data/processed/trends_time.parquet` (`month, tabby, tamara, is_partial`) and `trends_region.parquet`. It skips any lines Google puts before the header row, maps `"<1"` to 0.5, rolls daily or weekly exports up to monthly, and flags the incomplete download month. It also saves the chart below. Download date and Trends settings are recorded under `trends` in `config.yaml`.
-
-![Google search interest for Tabby and Tamara in Saudi Arabia](reports/figures/trends_interest_over_time.png)
-
-> "تمارا" (Tamara) is also a first name, so part of its interest is unrelated to the app. This likely explains the small non-zero values in 2019–2020.
-
-**Incremental collection:** each run reads what is already in `data/raw/` and only pages through reviews newer than the last stored date (with a one-day overlap). New reviews go to `data/raw/play_reviews_<app>_<YYYYMMDD>.parquet`. Requests are rate-limited (`collection.play_store.sleep_seconds` in `config.yaml`) and retried with backoff.
-
-## Phase 2: Cleaning and EDA
-
-**Cleaning** (`python -m src.clean.pipeline` → `data/processed/reviews_clean.parquet`, log in [`reports/cleaning_log.csv`](reports/cleaning_log.csv)):
-- **Arabic normalization** into a separate `text_norm` column (the original text is kept): Unicode NFKC, alef forms → ا, ة → ه, ى → ي, diacritics and tatweel removed, Arabic-Indic digits → 0-9, repeated letters capped at two (حلووووو → حلوو).
-- **Emoji** are extracted into their own column as a feature.
-- **Language** is detected from the text (Arabic / English / mixed / Arabizi / emoji only), not from the store's language bucket.
-- **Removed:** 2 double submissions and 176 reviews with no usable content (punctuation, numbers, single letters, other scripts). Repeated *text* is not treated as a duplicate: thousands of different people write "جيد" or "👍".
-- **Emoji-only reviews (2.6%)** are kept for analysis but flagged `trainable = False` for text models.
-
-**EDA** ([`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb)), Google Play, 183,341 reviews:
-- **85% of reviews are 5 stars** and the median positive review is 2 words, while the median 1-star review is 12–13 words. Classes are very imbalanced, so models will be judged on macro-F1.
-- **Tamara's review mix changed in February 2026:** positive reviews fell about 90% (about 2,200 → 190 a month), negative reviews only about 35% (113 → 72). Its average rating falls from 4.7 to 3.9 mostly because of who is reviewing, not because complaints rose.
-- **Tabby's negative reviews spiked in July–August 2026** (371 and 562 a month vs. about 150–230 normally), a candidate for the events analysis.
-- **Both apps reply to about 90% of 1–2 star reviews.** The overall gap (Tabby 56% vs. Tamara 11%) comes from Tabby also replying to positive reviews, which it started doing in 2024. Tamara replies faster (median under 1 hour vs. about 22 hours).
-- **Top complaints:** customer service for both apps; app updates causing a blank white screen for Tabby; late fees and the first payment for Tamara.
-- **Language:** Tabby's reviews are 52% English and 46% Arabic; Tamara's are 60% Arabic. Arabizi (Arabic in Latin letters) is essentially absent.
+- **Ratings are very positive.** 85% of reviews are 5 stars. Positive reviews are short (median 2 words), while 1-star reviews have a median of 12–13 words, so most of the detail about problems is in the negative reviews.
+- **Tamara's review mix changed in February 2026.** Positive reviews fell by about 90% (from about 2,200 to 190 a month), negative reviews by about 35% (from 113 to 72). The average rating dropped from 4.7 to 3.9 mainly because of a change in who reviews, not a rise in complaints.
+- **Tabby's negative reviews spiked in July–August 2026**, reaching 371 and 562 a month against a usual 150–230.
+- **Both companies reply to about 90% of 1–2 star reviews.** The difference in overall reply rate (Tabby 56%, Tamara 11%) comes from Tabby also replying to positive reviews, which it has done since 2024. Tamara replies faster (median under 1 hour vs. about 22 hours).
+- **The most frequent complaints** are customer service (both apps), app updates showing a blank white screen (Tabby), and late fees and the first payment (Tamara).
 
 ![Positive and negative reviews per month](reports/figures/eda_reviews_by_sentiment.png)
 
 ![Distinctive two-word phrases in Arabic reviews](reports/figures/eda_terms_arabic.png)
+
+More charts and tables are in [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb).
+
+## Data
+
+| Source | Coverage | Use |
+|---|---|---|
+| Google Play reviews (`google-play-scraper`): `app.tabby.client`, `co.tamara.user` | Full available history, country `sa`, Arabic and English queries; 183,341 reviews after cleaning | Main dataset |
+| Apple App Store public RSS: `1528022364`, `1533512531` | Most recent 500 reviews per app | Comparison sample |
+| Google Trends, manual export | Monthly search interest for "تابي" and "تمارا" in Saudi Arabia from December 2018, plus interest by region | Context for the events analysis |
+| SAMA payments statistics via [KAPSARC](https://data.kapsarc.org) (`pos-transactions`) | Monthly POS and mada e-commerce sales and transactions from January 2019 | Context for the events analysis |
+| Events timeline (`data/external/events.csv`) | Regulation, funding, product and seasonal events, each with a source URL | Events analysis (in progress) |
+
+**Fields kept:** review ID, app, source, query language, text, star rating, review date, thumbs-up count, app version, whether the developer replied, and the reply date. Reviewer names, profile images and user IDs are never stored.
+
+**Notes on the data:**
+- Package IDs were checked against the live store listings. Tabby's `app.tabby.cashier` is a separate merchant app and is not used.
+- The Google Trends values are a relative index (0–100) on a common scale for both terms, not search volumes. The English terms "Tabby" and "Tamara" were excluded because they had much lower search interest and are ambiguous. Export settings are recorded in `config.yaml`.
+- The SAMA e-commerce series covers mada debit cards only and excludes Visa, Mastercard and credit-card spending.
+
+![Google search interest for Tabby and Tamara in Saudi Arabia](reports/figures/trends_interest_over_time.png)
+
+## Method
+
+**Collection.** Reviews are collected incrementally: each run fetches only reviews newer than the last stored date, with a one-day overlap, rate limiting and retries. Raw files are stored as Parquet.
+
+**Cleaning.** The pipeline ([`src/clean/pipeline.py`](src/clean/pipeline.py)) removed 2 double submissions and 176 reviews with no usable content. Identical text from different reviewers (for example "جيد" or "👍") is kept, since each is a separate opinion. Each step is recorded in [`reports/cleaning_log.csv`](reports/cleaning_log.csv).
+
+**Arabic normalization.** A normalized copy of each review is stored next to the original text. It applies Unicode NFKC, unifies alef forms (أ إ آ → ا), taa marbuta (ة → ه) and alef maqsura (ى → ي), removes diacritics and tatweel, converts Arabic-Indic digits, and caps repeated letters at two (حلووووو → حلوو). Emoji are extracted into a separate column for use as features.
+
+**Language detection.** Language is detected from the text rather than from the store's query language, because each query bucket contains about 2,000 reviews in the other language. Reviews are tagged as Arabic (50%), English (47%), emoji only (2.6%) or mixed (0.1%). No Arabizi (Arabic written in Latin letters) was found. Emoji-only reviews are included in the analysis but excluded from text-model training.
+
+**Distinctive phrases.** Words and two-word phrases are ranked with the weighted log-odds ratio with an informative Dirichlet prior (Monroe, Colaresi & Quinn, 2008), comparing 1–2 star with 4–5 star reviews, separately for each app and language.
+
+## Limitations
+
+- App reviews are not a random sample of users. Unhappy users are more likely to write long reviews, and in-app rating prompts affect who reviews, as the Tamara change in February 2026 shows.
+- Star ratings are a noisy measure of sentiment. Final model results will be reported on a hand-labeled test set.
+- Review dates reflect the latest edit of a review, and reply dates the latest edit of a reply, so response times are upper bounds.
+- "تمارا" is also a given name, so part of Tamara's search interest is unrelated to the app.
+- There is no access to company transaction data. Results describe what users write, not how the companies perform.
+
+## Project structure
+
+```
+├── config.yaml              # app IDs, paths and parameters
+├── src/
+│   ├── collect/             # Google Play, App Store RSS, KAPSARC, Google Trends
+│   ├── clean/               # normalization, language detection, cleaning pipeline
+│   └── analysis/            # EDA tables and chart helpers
+├── notebooks/               # collection checks and EDA
+├── reports/                 # cleaning log and figures
+├── data/                    # raw and processed data (not committed), external sources
+└── tests/
+```
 
 ## How to run
 
@@ -73,20 +80,29 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 
-python -m src.collect.play_store                 # Google Play, both apps (incremental)
+python -m src.collect.play_store                   # Google Play reviews, both apps (incremental)
 python -m src.collect.play_store --max-reviews 50  # quick test
-python -m src.collect.play_store --full          # rescan full history, skipping stored IDs
-python -m src.collect.app_store                  # optional Apple RSS reviews
-python -m src.collect.sama_kapsarc               # SAMA POS / mada e-commerce statistics
-python -m src.collect.google_trends              # clean manual Google Trends exports + chart
-python -m src.clean.pipeline                     # Phase 2: clean, normalize, tag language
-jupyter notebook notebooks/02_eda.ipynb          # Phase 2: EDA (saves reports/figures/eda_*.png)
+python -m src.collect.app_store                    # App Store RSS reviews
+python -m src.collect.sama_kapsarc                 # SAMA payments statistics
+python -m src.collect.google_trends                # clean Google Trends exports
+python -m src.clean.pipeline                       # clean and normalize reviews
+jupyter notebook notebooks/02_eda.ipynb            # exploratory analysis
 
 pytest
 ```
 
-All settings (app IDs, country, languages, rate limits, paths) live in `config.yaml`.
+All settings (app IDs, country, languages, rate limits, paths, cleaning thresholds) are in `config.yaml`.
+
+## Roadmap
+
+- [x] Data collection
+- [x] Cleaning, normalization and exploratory analysis
+- [ ] Sentiment models: TF-IDF baseline vs. a pretrained Arabic transformer, evaluated on a hand-labeled test set
+- [ ] Topic modeling of complaints and praise
+- [ ] Sentiment trends compared with regulation, product and seasonal events
+- [ ] Prediction API (FastAPI)
+- [ ] Web dashboard (Flutter)
 
 ## Data and ethics
 
-Raw scraped data is not committed or redistributed (`data/raw/` is gitignored). Only public review text and ratings are used, and no names or personal data are stored. The repository will contain only an anonymized hand-labelled gold set, small anonymized samples, aggregates and figures.
+Only public review text and ratings are used. No names or personal data are stored or published, and raw review data is not committed or redistributed (`data/raw/` and `data/processed/` are gitignored). The repository contains only code, aggregate tables, figures and, later, an anonymized hand-labeled test set. Results describe user opinions, not company performance.
