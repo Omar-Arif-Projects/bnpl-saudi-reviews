@@ -1,14 +1,14 @@
-"""Summary tables for exploratory data analysis (Phase 2).
+"""Summary tables for exploratory data analysis.
 
-Every function takes the clean review DataFrame (from :func:`load_clean`) and
-returns a tidy table; plotting lives in :mod:`src.analysis.plots` and the
-narrative in ``notebooks/02_eda.ipynb``.
+All functions take the DataFrame returned by :func:`load_clean` and return a
+table. Plotting is in :mod:`src.analysis.plots`.
 
-Notes on the data that affect interpretation:
-- ``review_date`` on Google Play is the date of the latest version of a review;
-  users can edit reviews, so some dates are later than the original posting.
-- ``reply_date`` is the date of the latest developer reply, so response times
-  are upper bounds when a reply was edited.
+Data caveats:
+
+- ``review_date`` is the date of the latest version of a review; edited
+  reviews carry the edit date.
+- ``reply_date`` is the date of the latest version of the developer reply, so
+  response times are upper bounds.
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ def load_clean(source: str | None = "google_play") -> pd.DataFrame:
     """Load the clean dataset and add analysis columns.
 
     Args:
-        source: Keep only this source (``"google_play"`` or ``"app_store_rss"``);
-            ``None`` keeps both. Default is Google Play, the main dataset.
+        source: Source to keep (``"google_play"`` or ``"app_store_rss"``), or
+            ``None`` for both.
 
     Returns:
-        DataFrame with extra columns ``month`` (month start, naive),
-        ``sentiment`` (from stars) and ``reply_hours``.
+        DataFrame with added ``month`` (timezone-naive month start),
+        ``sentiment`` (from star rating) and ``reply_hours``.
     """
     df = pd.read_parquet(get_path("reviews_clean"))
     if source is not None:
@@ -51,14 +51,14 @@ def load_clean(source: str | None = "google_play") -> pd.DataFrame:
 
 
 def overview(df: pd.DataFrame) -> pd.DataFrame:
-    """Headline numbers per app.
+    """Summarize each app.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        One row per app: reviews, first/last month, mean rating, share of
-        1-2 star reviews, share Arabic, developer reply rate.
+        One row per app with review count, first and last month, mean rating,
+        negative share, Arabic share and developer reply rate.
     """
     g = df.groupby("app")
     return pd.DataFrame(
@@ -75,29 +75,26 @@ def overview(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def monthly_volume(df: pd.DataFrame) -> pd.DataFrame:
-    """Reviews per month per app.
+    """Count reviews per month and app.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        Wide table indexed by month, one column per app (0 where none).
+        Table indexed by month with one column per app.
     """
     return df.pivot_table(index="month", columns="app", values="review_id", aggfunc="count", fill_value=0)
 
 
 def monthly_by_sentiment(df: pd.DataFrame, sentiment: str) -> pd.DataFrame:
-    """Reviews per month per app for one star-based sentiment group.
-
-    Counts (not shares) are used so that a change in how many happy users
-    review cannot hide or fake a change in complaints.
+    """Count reviews per month and app for one sentiment group.
 
     Args:
         df: Output of :func:`load_clean`.
         sentiment: ``"negative"``, ``"neutral"`` or ``"positive"``.
 
     Returns:
-        Wide table indexed by month, one column per app.
+        Table indexed by month with one column per app.
     """
     return monthly_volume(df[df["sentiment"] == sentiment]).reindex(
         monthly_volume(df).index, fill_value=0
@@ -105,15 +102,16 @@ def monthly_by_sentiment(df: pd.DataFrame, sentiment: str) -> pd.DataFrame:
 
 
 def top_emojis(df: pd.DataFrame, sentiment: str, n: int = 10) -> pd.DataFrame:
-    """Most common emoji in reviews of one sentiment group, per app.
+    """Find the most frequent emoji per app within one sentiment group.
 
     Args:
         df: Output of :func:`load_clean`.
-        sentiment: Sentiment group to count.
-        n: Emoji to return per app.
+        sentiment: Sentiment group.
+        n: Number of emoji per app.
 
     Returns:
-        Columns ``app, emoji, reviews`` (reviews containing it at least once).
+        Columns ``app``, ``emoji`` and ``reviews`` (number of reviews
+        containing the emoji).
     """
     rows = []
     for app, group in df[df["sentiment"] == sentiment].groupby("app"):
@@ -125,14 +123,14 @@ def top_emojis(df: pd.DataFrame, sentiment: str, n: int = 10) -> pd.DataFrame:
 
 
 def monthly_mean_rating(df: pd.DataFrame, min_reviews: int = 30) -> pd.DataFrame:
-    """Mean star rating per month per app, hiding thin months.
+    """Compute the mean star rating per month and app.
 
     Args:
         df: Output of :func:`load_clean`.
         min_reviews: Months with fewer reviews are set to NaN.
 
     Returns:
-        Wide table indexed by month, one column per app.
+        Table indexed by month with one column per app.
     """
     g = df.groupby(["month", "app"])["rating"]
     mean = g.mean().where(g.size() >= min_reviews)
@@ -140,93 +138,94 @@ def monthly_mean_rating(df: pd.DataFrame, min_reviews: int = 30) -> pd.DataFrame
 
 
 def rating_distribution(df: pd.DataFrame) -> pd.DataFrame:
-    """Share of each star rating per app.
+    """Compute the share of each star rating per app.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        Table indexed by rating (1-5), one column per app, values sum to 1.
+        Table indexed by rating (1-5) with one column per app.
     """
     counts = pd.crosstab(df["rating"].astype(int), df["app"])
     return (counts / counts.sum()).reindex(STAR_ORDER, fill_value=0)
 
 
 def language_mix(df: pd.DataFrame) -> pd.DataFrame:
-    """Share of each detected language per app.
+    """Compute the share of each detected language per app.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        Table indexed by language label, one column per app, sorted by total.
+        Table indexed by language label with one column per app, sorted by
+        overall share.
     """
     shares = pd.crosstab(df["lang"], df["app"], normalize="columns")
     return shares.loc[shares.sum(axis=1).sort_values(ascending=False).index]
 
 
 def language_vs_query(df: pd.DataFrame) -> pd.DataFrame:
-    """Compare the store's language bucket with the detected language.
+    """Cross-tabulate the store query language against the detected language.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        Counts with ``lang_query`` rows and detected ``lang`` columns.
+        Counts with ``lang_query`` as rows and ``lang`` as columns, with totals.
     """
     return pd.crosstab(df["lang_query"], df["lang"], margins=True)
 
 
 def length_by_rating(df: pd.DataFrame) -> pd.DataFrame:
-    """Median review length in words per star rating and app.
+    """Compute the median review length in words per rating and app.
 
-    Emoji-only reviews are excluded (they have zero words by definition).
+    Emoji-only reviews are excluded.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        Table indexed by rating, one column per app.
+        Table indexed by rating with one column per app.
     """
     words = df[~df["is_emoji_only"]]
     return words.pivot_table(index="rating", columns="app", values="n_words", aggfunc="median")
 
 
 def reply_by_rating(df: pd.DataFrame) -> pd.DataFrame:
-    """Developer reply rate per star rating and app.
+    """Compute the developer reply rate per rating and app.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        Table indexed by rating, one column per app (share replied).
+        Table indexed by rating with one column per app.
     """
     return df.pivot_table(index="rating", columns="app", values="has_reply", aggfunc="mean")
 
 
 def reply_by_year(df: pd.DataFrame) -> pd.DataFrame:
-    """Developer reply rate per year and app.
+    """Compute the developer reply rate per year and app.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        Table indexed by year, one column per app.
+        Table indexed by year with one column per app.
     """
     year = df["month"].dt.year.rename("year")
     return df.groupby([year, "app"])["has_reply"].mean().unstack("app")
 
 
 def reply_time(df: pd.DataFrame) -> pd.DataFrame:
-    """Developer response time (hours) for replied reviews, per app.
+    """Summarize developer response time in hours per app.
 
-    Negative gaps (reply dated before an edited review) are excluded.
+    Replies dated before the review (possible after a review edit) are excluded.
 
     Args:
         df: Output of :func:`load_clean`.
 
     Returns:
-        Table indexed by app with replied count, median and 75th / 90th
+        Table indexed by app with reply count, median, 75th and 90th
         percentile hours, and share answered within 24 hours.
     """
     replied = df[df["has_reply"] & (df["reply_hours"] >= 0)]
@@ -242,29 +241,14 @@ def reply_time(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def tokenize(text: str, script: str, stopwords: frozenset[str]) -> list[str]:
-    """Split normalized text into words of one script, minus stop words.
-
-    Args:
-        text: Normalized review text (``text_norm``).
-        script: ``"arabic"`` or ``"english"``.
-        stopwords: Words to drop.
-
-    Returns:
-        List of tokens (length >= 2).
-    """
-    pattern = ARABIC_TOKEN if script == "arabic" else LATIN_TOKEN
-    return [t for t in pattern.findall(strip_emojis(text)) if len(t) >= 2 and t not in stopwords]
-
-
 def stopwords_for(script: str) -> frozenset[str]:
-    """Return the stop-word set for a script from config.
+    """Return the stop-word set for a script.
 
     Args:
         script: ``"arabic"`` or ``"english"``.
 
     Returns:
-        Frozen set of stop words.
+        Stop words from config; English also includes scikit-learn's list.
     """
     cfg = load_config()["eda"]
     if script == "arabic":
@@ -272,16 +256,31 @@ def stopwords_for(script: str) -> frozenset[str]:
     return frozenset(ENGLISH_STOP_WORDS) | frozenset(cfg["stopwords_en_extra"])
 
 
+def tokenize(text: str, script: str, stopwords: frozenset[str]) -> list[str]:
+    """Extract words of one script from normalized text.
+
+    Args:
+        text: Normalized review text.
+        script: ``"arabic"`` or ``"english"``.
+        stopwords: Words to exclude.
+
+    Returns:
+        Tokens of at least two characters.
+    """
+    pattern = ARABIC_TOKEN if script == "arabic" else LATIN_TOKEN
+    return [t for t in pattern.findall(strip_emojis(text)) if len(t) >= 2 and t not in stopwords]
+
+
 def ngram_counts(texts: pd.Series, script: str, n: int) -> Counter[str]:
-    """Count n-grams (counted once per review) across texts.
+    """Count the number of reviews containing each n-gram.
 
     Args:
         texts: Normalized review texts.
         script: ``"arabic"`` or ``"english"``.
-        n: 1 for words, 2 for bigrams.
+        n: N-gram length.
 
     Returns:
-        Counter of n-gram -> number of reviews containing it.
+        Document frequency per n-gram.
     """
     stop = stopwords_for(script)
     counts: Counter[str] = Counter()
@@ -300,24 +299,23 @@ def distinctive_terms(
     min_count: int | None = None,
     top_n: int | None = None,
 ) -> pd.DataFrame:
-    """Words or bigrams most typical of negative vs. positive reviews.
+    """Rank n-grams by how strongly they distinguish negative from positive reviews.
 
     Uses the weighted log-odds ratio with an informative Dirichlet prior
-    (Monroe, Colaresi & Quinn, 2008). Unlike raw frequency, it down-weights
-    words common in both groups ("تطبيق", "good") and gives z-scores, so rare
-    words with noisy ratios do not dominate.
+    (Monroe, Colaresi & Quinn, 2008), with document frequencies as counts.
 
     Args:
         df: Output of :func:`load_clean`.
-        app: App key (``"tabby"`` / ``"tamara"``).
-        script: ``"arabic"`` (rows tagged Arabic) or ``"english"``.
-        n: 1 for words, 2 for bigrams.
-        min_count: Minimum reviews containing the term (default from config).
-        top_n: Terms to return per side (default from config).
+        app: App key.
+        script: ``"arabic"`` or ``"english"``; selects reviews with that ``lang``.
+        n: N-gram length.
+        min_count: Minimum document frequency across both groups. Defaults to
+            ``eda.min_term_count``.
+        top_n: Terms per side. Defaults to ``eda.top_n_terms``.
 
     Returns:
-        Rows with ``term, side ('negative'/'positive'), z, count_neg, count_pos``,
-        the top ``top_n`` per side, strongest first.
+        Columns ``term``, ``side``, ``z`` (absolute z-score), ``count_neg`` and
+        ``count_pos``, with the top ``top_n`` terms per side.
     """
     cfg = load_config()["eda"]
     min_count = cfg["min_term_count"] if min_count is None else min_count

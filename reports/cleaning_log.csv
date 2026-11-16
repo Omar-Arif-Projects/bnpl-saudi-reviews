@@ -1,6 +1,6 @@
 step,reason,removed,rows_after
 loaded,all raw files,0,184501
-duplicate_id,same review collected twice (source + review_id),0,184501
-double_submission,"same app, text, rating and timestamp",2,184499
-empty,no text at all,0,184499
-no_content,"fewer than 2 Arabic/Latin letters and no emoji (punctuation, numbers, single letters, other scripts)",176,184323
+duplicate_id,same source and review_id,0,184501
+double_submission,"same source, app, text, rating and timestamp",2,184499
+empty,empty text,0,184499
+no_content,fewer than 2 Arabic/Latin letters and no emoji,176,184323

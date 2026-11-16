@@ -1,15 +1,8 @@
-"""Shared matplotlib style and chart helpers for static report figures.
+"""Shared matplotlib style and chart helpers for report figures.
 
-Design rules used in every chart:
-- Each app keeps one color everywhere (``viz.colors`` in config, a pair checked
-  for colorblind separation). Color follows the app, never the rank.
-- One y-axis per panel; different scales go in separate panels.
-- Light gridlines, no top/right spines, text in neutral ink (never series color).
-- Two series always get a legend; line charts also get end-of-line labels.
-
-Arabic text: matplotlib >= 3.11 joins Arabic letters and lays them out right to
-left by itself (checked on 3.11.2), so labels are passed in as plain text. Do
-NOT pre-process them with arabic-reshaper / python-bidi: that reverses them.
+Colors and neutral tones are read from the ``viz`` section of ``config.yaml``.
+Arabic labels are passed as plain text; matplotlib >= 3.11 handles shaping and
+right-to-left layout.
 """
 
 from __future__ import annotations
@@ -28,7 +21,7 @@ APPS = load_config()["apps"]
 
 
 def app_color(app: str) -> str:
-    """Return the fixed color for an app key."""
+    """Return the configured color for an app key."""
     return VIZ["colors"][app]
 
 
@@ -38,7 +31,7 @@ def app_name(app: str) -> str:
 
 
 def setup_style() -> None:
-    """Apply the shared rcParams (call once per notebook or script)."""
+    """Apply the project's matplotlib rcParams."""
     plt.rcParams.update(
         {
             "figure.facecolor": VIZ["surface"],
@@ -46,7 +39,7 @@ def setup_style() -> None:
             "savefig.facecolor": VIZ["surface"],
             "figure.dpi": 110,
             "savefig.dpi": 150,
-            "font.family": "DejaVu Sans",  # ships with matplotlib, has Arabic glyphs
+            "font.family": "DejaVu Sans",
             "font.size": 9,
             "axes.titlesize": 11,
             "axes.titlelocation": "left",
@@ -72,18 +65,23 @@ def setup_style() -> None:
 
 
 def caption(fig: Figure, text: str) -> None:
-    """Add a small source / note line at the bottom-left of a figure."""
+    """Add a source note at the bottom left of a figure.
+
+    Args:
+        fig: Target figure.
+        text: Note text.
+    """
     fig.text(0.01, 0.005, text, fontsize=7.5, color=VIZ["muted"], va="bottom")
 
 
 def lines_by_app(ax: Axes, wide: pd.DataFrame, label_ends: bool = True, fmt: str = "{:,.0f}") -> None:
-    """Draw one line per app column with a legend and end-of-line value labels.
+    """Plot one line per app with a legend and optional end labels.
 
     Args:
         ax: Target axes.
-        wide: Table indexed by time, one column per app key.
-        label_ends: Write "<App> <value>" at each line's last point.
-        fmt: Format for the end label value.
+        wide: Table indexed by time with one column per app key.
+        label_ends: Annotate the last point of each line with its value.
+        fmt: Format string for end labels.
     """
     for app in wide.columns:
         series = wide[app].dropna()
@@ -105,14 +103,14 @@ def grouped_bars(
     xlabels: list[str] | None = None,
     legend_loc: str = "upper right",
 ) -> None:
-    """Draw grouped vertical bars, one bar per app within each category.
+    """Plot grouped vertical bars with one bar per app in each category.
 
     Args:
         ax: Target axes.
-        wide: Table indexed by category, one column per app key.
-        fmt: If given, a format string for value labels above the bars.
-        xlabels: Category labels (defaults to the index as strings).
-        legend_loc: Legend position; pick a corner without tall bars.
+        wide: Table indexed by category with one column per app key.
+        fmt: Format string for value labels; no labels if ``None``.
+        xlabels: Category labels. Defaults to the index values.
+        legend_loc: Legend location.
     """
     n = len(wide.columns)
     width = 0.8 / n
@@ -120,7 +118,7 @@ def grouped_bars(
     for i, app in enumerate(wide.columns):
         offsets = [xi - 0.4 + width * (i + 0.5) for xi in x]
         bars = ax.bar(
-            offsets, wide[app].values, width=width * 0.92,  # small gap between bars
+            offsets, wide[app].values, width=width * 0.92,
             color=app_color(app), label=app_name(app),
         )
         if fmt:
@@ -130,12 +128,12 @@ def grouped_bars(
 
 
 def terms_panel(ax: Axes, terms: pd.DataFrame, color: str, title: str) -> None:
-    """Horizontal bars of distinctive terms (strongest at the top).
+    """Plot distinctive terms as horizontal bars, strongest at the top.
 
     Args:
         ax: Target axes.
         terms: Rows for one side from :func:`src.analysis.eda.distinctive_terms`.
-        color: Bar color (the app's color).
+        color: Bar color.
         title: Panel title.
     """
     terms = terms.sort_values("z")
@@ -148,8 +146,7 @@ def terms_panel(ax: Axes, terms: pd.DataFrame, color: str, title: str) -> None:
 
 
 def save(fig: Figure, name: str) -> Path:
-    """Save a figure to ``paths.figures`` as PNG (the figure stays open so a
-    notebook still displays it).
+    """Save a figure as PNG in ``paths.figures``. The figure is not closed.
 
     Args:
         fig: Figure to save.

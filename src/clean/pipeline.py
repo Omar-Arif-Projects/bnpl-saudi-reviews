@@ -1,21 +1,20 @@
 """Build the clean review dataset from the raw collection files.
 
-Steps (each removal is counted and written to the cleaning log):
-1. Load every raw Parquet file (Google Play and App Store).
-2. Drop repeated review IDs (the same review collected twice).
-3. Drop double submissions: same source, app, text, rating and timestamp.
-   Repeated *text* alone is NOT a duplicate: thousands of different people
-   write "جيد" or "👍", and each is a real opinion.
+Steps:
+
+1. Load all raw Parquet files (Google Play and App Store).
+2. Drop repeated review IDs.
+3. Drop double submissions (same source, app, text, rating and timestamp).
+   Identical text from different reviews is retained.
 4. Drop empty reviews.
-5. Normalize text, extract emoji, tag language, count characters and words.
-6. Drop reviews with no usable content: fewer than ``min_letters`` letters and
-   no emoji (e.g. ".", "1", a single letter).
-7. Flag rows for model training: languages in ``exclude_from_training`` (emoji-only
-   reviews) stay in the dataset for EDA but get ``trainable = False``.
+5. Add normalized text, emoji, language and length features.
+6. Drop reviews with fewer than ``min_letters`` letters and no emoji.
+7. Set ``trainable = False`` for languages listed in ``exclude_from_training``.
 
 Outputs (paths from ``config.yaml``):
-- ``paths.reviews_clean``: the clean dataset (gitignored).
-- ``paths.cleaning_log``: one row per step with counts (committed).
+
+- ``paths.reviews_clean``: cleaned dataset.
+- ``paths.cleaning_log``: rows removed per step.
 
 Usage::
 
@@ -39,10 +38,10 @@ WORD = re.compile(r"[a-z0-9'ء-يٱ-ۓ]+")
 
 
 class RemovalLog:
-    """Collect row counts before and after each cleaning step."""
+    """Record row counts before and after each cleaning step."""
 
     def __init__(self, start_rows: int) -> None:
-        """Start the log.
+        """Initialize the log.
 
         Args:
             start_rows: Number of rows loaded.
@@ -52,16 +51,16 @@ class RemovalLog:
         ]
 
     def record(self, step: str, reason: str, before: pd.DataFrame, after: pd.DataFrame) -> pd.DataFrame:
-        """Record one step and return the filtered frame.
+        """Record one step.
 
         Args:
-            step: Short step name.
-            reason: Plain-language reason for the removal.
-            before: Frame before the step.
-            after: Frame after the step.
+            step: Step name.
+            reason: Description of the removal criterion.
+            before: DataFrame before the step.
+            after: DataFrame after the step.
 
         Returns:
-            ``after``, so calls can be chained.
+            ``after``, unchanged.
         """
         removed = len(before) - len(after)
         self.rows.append({"step": step, "reason": reason, "removed": removed, "rows_after": len(after)})
@@ -69,26 +68,22 @@ class RemovalLog:
         return after
 
     def to_frame(self) -> pd.DataFrame:
-        """Return the log as a DataFrame.
-
-        Returns:
-            One row per step.
-        """
+        """Return the log as a DataFrame with one row per step."""
         return pd.DataFrame(self.rows)
 
 
 def load_raw_files() -> pd.DataFrame:
-    """Concatenate all raw review files without dropping anything.
+    """Concatenate all raw review files.
 
     Returns:
         Combined raw DataFrame.
 
     Raises:
-        FileNotFoundError: If ``data/raw`` has no review files.
+        FileNotFoundError: If no raw review files exist.
     """
     files = sorted(get_path("raw").glob("*_reviews_*.parquet"))
     if not files:
-        raise FileNotFoundError("No raw review files; run src.collect.play_store first.")
+        raise FileNotFoundError("No raw review files found; run src.collect.play_store first.")
     logger.info("Loading %d raw files", len(files))
     return pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
 
@@ -98,12 +93,12 @@ def add_text_features(df: pd.DataFrame, rules: LanguageRules, repeat_max: int) -
 
     Args:
         df: Reviews with a ``text`` column.
-        rules: Language-tagging rules.
-        repeat_max: Longest run of a repeated character to keep.
+        rules: Language tagging rules.
+        repeat_max: Maximum run length of a repeated character.
 
     Returns:
-        Copy of ``df`` with ``text_norm, emojis, n_emoji, lang, n_letters,
-        n_chars, n_words``.
+        Copy of ``df`` with ``text_norm``, ``emojis``, ``n_emoji``, ``lang``,
+        ``n_letters``, ``n_chars`` and ``n_words``.
     """
     out = df.copy()
     out["text_norm"] = out["text"].map(lambda t: normalize_text(t, repeat_max))
@@ -119,27 +114,27 @@ def add_text_features(df: pd.DataFrame, rules: LanguageRules, repeat_max: int) -
 
 
 def clean(raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run all cleaning steps on the raw reviews.
+    """Apply all cleaning steps.
 
     Args:
         raw: Output of :func:`load_raw_files`.
 
     Returns:
-        ``(clean_df, log_df)``.
+        Tuple of the cleaned DataFrame and the removal log.
     """
     cfg = load_config()["cleaning"]
     rules = LanguageRules.from_config(cfg["language"])
     log = RemovalLog(len(raw))
 
     df = log.record(
-        "duplicate_id", "same review collected twice (source + review_id)",
+        "duplicate_id", "same source and review_id",
         raw, raw.drop_duplicates(["source", "review_id"]),
     )
     df = log.record(
-        "double_submission", "same app, text, rating and timestamp",
+        "double_submission", "same source, app, text, rating and timestamp",
         df, df.drop_duplicates(["source", "app", "text", "rating", "review_date"]),
     )
-    df = log.record("empty", "no text at all", df, df[df["text"].fillna("").str.strip() != ""])
+    df = log.record("empty", "empty text", df, df[df["text"].fillna("").str.strip() != ""])
 
     df = add_text_features(df, rules, int(cfg["repeat_max"]))
     has_content = ((df["n_letters"] >= int(cfg["min_letters"])) | (df["n_emoji"] > 0)) & (
@@ -147,8 +142,7 @@ def clean(raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     df = log.record(
         "no_content",
-        f"fewer than {cfg['min_letters']} Arabic/Latin letters and no emoji "
-        "(punctuation, numbers, single letters, other scripts)",
+        f"fewer than {cfg['min_letters']} Arabic/Latin letters and no emoji",
         df, df[has_content],
     )
 
@@ -156,10 +150,7 @@ def clean(raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     df["trainable"] = ~df["lang"].isin(cfg["exclude_from_training"])
     df = df.sort_values(["app", "source", "review_date"]).reset_index(drop=True)
 
-    logger.info(
-        "Kept %d rows; %d flagged not trainable (%s)",
-        len(df), int((~df["trainable"]).sum()), ", ".join(cfg["exclude_from_training"]),
-    )
+    logger.info("Kept %d rows; %d not trainable", len(df), int((~df["trainable"]).sum()))
     return df, log.to_frame()
 
 

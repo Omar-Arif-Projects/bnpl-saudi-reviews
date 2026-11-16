@@ -162,6 +162,7 @@ _Last updated: 2026-11-15_
 
 ## Coding standards
 - Type hints and docstrings on all functions; config values come from `config.yaml`, no hard-coded paths.
+- Comments and docstrings are neutral and professional: state what the code does and, briefly, why when it isn't obvious. No conversational tone, no project history, names or dates in code. Decisions and findings belong in the README, CLAUDE.md or commit messages.
 - Set random seeds everywhere for reproducibility.
 - Notebooks call functions from `src/`; heavy logic lives in `src/`, not in notebooks.
 - Each phase ends with a short entry in `README.md` or `reports/` and a clean commit.

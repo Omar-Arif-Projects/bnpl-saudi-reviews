@@ -13,7 +13,7 @@ from src.config import load_config
 
 @pytest.fixture(scope="module")
 def rules() -> LanguageRules:
-    """Language rules from the real config, so tests track config changes."""
+    """Language rules loaded from the project config."""
     return LanguageRules.from_config(load_config()["cleaning"]["language"])
 
 
@@ -25,11 +25,11 @@ def rules() -> LanguageRules:
         ("على", "علي"),                                # alef maqsura
         ("ممـــتاز", "ممتاز"),                          # tatweel
         ("شُكْرًا", "شكرا"),                             # diacritics
-        ("حلووووو", "حلوو"),                            # repeats capped at 2
-        ("GOOOOD   App", "good app"),                  # lowercase, whitespace, repeats
+        ("حلووووو", "حلوو"),                            # character runs
+        ("GOOOOD   App", "good app"),                  # case, whitespace, runs
         ("١٠٠ ٪", "100 ٪"),                             # Arabic-Indic digits
-        ("𝓣𝓱𝓪𝓷𝓴𝓼", "thanks"),                           # fancy font via NFKC
-        ("‏شكرا‎", "شكرا"),                   # invisible direction marks
+        ("𝓣𝓱𝓪𝓷𝓴𝓼", "thanks"),                           # NFKC
+        ("‏شكرا‎", "شكرا"),                   # bidi control characters
         ("", ""),
         (None, ""),
     ],
@@ -58,19 +58,19 @@ def test_normalize_keeps_emoji_joiner() -> None:
     ("text", "label"),
     [
         ("ممتاز من باب التيسير والتسهيل", "arabic"),
-        ("شكرا Tabby", "arabic"),                       # brand names ignored
-        ("Tabby", "english"),                           # ...unless that's all there is
+        ("شكرا Tabby", "arabic"),                       # brand term excluded
+        ("Tabby", "english"),                           # brand term only
         ("great app, easy to use", "english"),
-        ("I liked it mashallah", "english"),            # one loan phrase is not Arabizi
+        ("I liked it mashallah", "english"),            # loan phrase
         ("2nd payment failed after 3x tries, limit 5k", "english"),
         ("التطبيق very slow", "mixed"),
-        ("xممتاز", "arabic"),                           # stray single Latin letter
+        ("xممتاز", "arabic"),                           # single Latin letter
         ("el tatbeeq 7lw mara", "arabizi"),
         ("ya3ni zain bas", "arabizi"),
-        ("F.A.S.T", "english"),                         # spelled-out letters
+        ("F.A.S.T", "english"),                         # dotted abbreviation
         ("👍👍👍", "emoji_only"),
         ("...", "other"),
-        ("ভালো", "other"),                              # Bengali: neither script
+        ("ভালো", "other"),                              # unsupported script
     ],
 )
 def test_detect_language(text: str, label: str, rules: LanguageRules) -> None:

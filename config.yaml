@@ -53,46 +53,36 @@ kapsarc:
     "POS Transactions Using Near Field Communication Technology : Sales (In Thousand Riyals) : Sales Using Mobile": nfc_mobile_sales_m_sar
 
 trends:
-  # MANUAL DOWNLOADS from https://trends.google.com/explore (no API, no scraper).
-  # src/collect/google_trends.py only cleans these files.
+  # Manual exports from Google Trends Explore; cleaned by src/collect/google_trends.py.
   source: "manual export, Google Trends Explore"
   downloaded_on: "2026-11-15"
-  geo: "SA"                    # Saudi Arabia, whole country
-  # App key -> search term exactly as typed. Both terms were compared in ONE
-  # query, so the 0-100 index is shared (100 = peak across both).
+  geo: "SA"
+  category: "All categories"
+  search_property: "Web Search"
+  # App key -> search term. All terms are compared in a single query, so the
+  # 0-100 index is on a common scale.
   terms:
     tabby: "تابي"
     tamara: "تمارا"
-  # The time-series export starts at 2018-12-01 with monthly rows and ends at the
-  # partial month 2026-11.
   time_range_in_file: "2018-12-01 to 2026-11-01"
   resolution: "monthly"
-  # Not stored in the export files; confirmed by Omar from the Trends UI (2026-11-15).
-  category: "All categories"
-  search_property: "Web Search"
   exports:
     - "trends_time.csv (Interest over time)"
     - "trends_region.csv (Interest by subregion, 13 regions)"
-  # English terms ("Tabby", "Tamara") were deliberately NOT used. Omar compared all
-  # four terms in one Trends query (2026-11-15): the English names were searched far
-  # less than the Arabic ones (visual check; that comparison was not exported).
-  # Both English words also have other meanings (a cat breed, a first name).
+  # Excluded: much lower search interest than the Arabic terms in a combined
+  # comparison, and ambiguous (common noun / given name).
   excluded_terms: ["Tabby", "Tamara"]
 
 cleaning:
-  repeat_max: 2              # حلووووو -> حلوو (keep 2 so emphasis is still visible)
-  min_letters: 2             # reviews with fewer letters AND no emoji are dropped ("ok" stays)
-  # Kept for EDA but not used to train text models (decision 2026-11-15).
-  exclude_from_training: ["emoji_only"]
+  repeat_max: 2              # maximum run of a repeated character
+  min_letters: 2             # minimum Arabic/Latin letters for reviews without emoji
+  exclude_from_training: ["emoji_only"]   # language labels with trainable = False
   language:
-    mixed_min_share: 0.2     # smaller script must be >= 20% of words to count as mixed
-    arabizi_min_tokens: 2    # Arabizi hits needed, so one "inshallah" stays English
+    mixed_min_share: 0.2     # minimum minority-script share of words for "mixed"
+    arabizi_min_tokens: 2    # minimum Arabizi tokens for "arabizi"
     brand_terms: ["tabby", "tamara", "تابي", "تمارا", "تابى"]
-    # Common Gulf Arabizi words (lowercase). Digit spellings (7lw, ya3ni) are
-    # caught by pattern; this list adds words written without digits.
-    # Phrases English-speaking users also write (mashallah, inshallah,
-    # alhamdulillah, shukran, wallah, yalla, khalas) are deliberately NOT listed:
-    # they made English reviews look like Arabizi.
+    # Arabizi words without digits. Religious and loan phrases common in
+    # English text (e.g. "inshallah", "mashallah") are intentionally omitted.
     arabizi_words: [
       "7lw", "7elw", "helw", "hilw", "7lo", "mara", "marra", "wayed", "wajed", "wa9ed",
       "zain", "zein", "zeen", "ya3ni", "yaani", "ya3ny", "bas", "msh",
@@ -102,15 +92,15 @@ cleaning:
     ]
 
 labels:
-  # Star rating -> sentiment (weak labels; also used to group reviews in EDA).
+  # Weak sentiment labels from star ratings.
   star_to_sentiment: {1: "negative", 2: "negative", 3: "neutral", 4: "positive", 5: "positive"}
 
 eda:
-  min_term_count: 30         # a word / bigram must appear this often to be ranked
+  min_term_count: 30         # minimum document frequency for ranked n-grams
   top_n_terms: 15
-  log_odds_prior: 0.01       # Dirichlet prior strength (share of background counts)
-  # Words with no opinion content, in NORMALIZED form (ة->ه, ى->ي, no hamza on alef).
-  # English uses scikit-learn's stop-word list plus the extras below.
+  log_odds_prior: 0.01       # Dirichlet prior strength relative to background counts
+  # Arabic stop words in normalized form. English uses scikit-learn's list plus
+  # stopwords_en_extra.
   stopwords_ar: [
     "في", "من", "علي", "الي", "عن", "مع", "و", "او", "ثم", "ان", "انه", "انها", "لا", "ما",
     "لم", "لن", "هو", "هي", "هم", "انا", "انت", "انتم", "نحن", "هذا", "هذه", "ذلك", "تلك",
@@ -123,7 +113,7 @@ eda:
   stopwords_en_extra: ["app", "tabby", "tamara", "application", "im", "dont", "it's", "i'm", "don't", "use", "using"]
 
 viz:
-  colors: {tabby: "#2a78d6", tamara: "#eb6834"}   # colorblind-checked pair; same in every chart
+  colors: {tabby: "#2a78d6", tamara: "#eb6834"}   # validated for color-vision deficiency
   surface: "#fcfcfb"
   ink: "#0b0b0b"
   muted: "#52514e"
