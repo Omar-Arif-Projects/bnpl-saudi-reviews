@@ -49,6 +49,8 @@ More charts and tables are in [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb)
 
 **Language detection.** Language is detected from the text rather than from the store's query language, because each query bucket contains about 2,000 reviews in the other language. Reviews are tagged as Arabic (50%), English (47%), emoji only (2.6%) or mixed (0.1%). No Arabizi (Arabic written in Latin letters) was found. Emoji-only reviews are included in the analysis but excluded from text-model training.
 
+**Gold test set.** 400 Google Play reviews are labeled by hand for sentiment and main topic, with the star rating hidden. The sample is stratified by app, language and star group (40% 1–2 star, 25% 3 star, 35% 4–5 star per app and language), so negative and neutral reviews are over-sampled; each row carries a weight that restores population proportions. Review IDs are replaced by a hash, and e-mail addresses, URLs and long numbers are masked. Gold reviews are excluded from model training.
+
 **Distinctive phrases.** Words and two-word phrases are ranked with the weighted log-odds ratio with an informative Dirichlet prior (Monroe, Colaresi & Quinn, 2008), comparing 1–2 star with 4–5 star reviews, separately for each app and language.
 
 ## Limitations
@@ -66,8 +68,9 @@ More charts and tables are in [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb)
 ├── src/
 │   ├── collect/             # Google Play, App Store RSS, KAPSARC, Google Trends
 │   ├── clean/               # normalization, language detection, cleaning pipeline
+│   ├── label/               # gold-set sampling and labeling widget
 │   └── analysis/            # EDA tables and chart helpers
-├── notebooks/               # collection checks and EDA
+├── notebooks/               # collection checks, EDA and gold-set labeling
 ├── reports/                 # cleaning log and figures
 ├── data/                    # raw and processed data (not committed), external sources
 └── tests/
@@ -87,6 +90,8 @@ python -m src.collect.sama_kapsarc                 # SAMA payments statistics
 python -m src.collect.google_trends                # clean Google Trends exports
 python -m src.clean.pipeline                       # clean and normalize reviews
 jupyter notebook notebooks/02_eda.ipynb            # exploratory analysis
+python -m src.label.gold --sample                  # draw the gold-set sample
+jupyter notebook notebooks/gold_labeling.ipynb     # label it
 
 pytest
 ```

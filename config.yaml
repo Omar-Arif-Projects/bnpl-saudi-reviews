@@ -94,6 +94,32 @@ cleaning:
 labels:
   # Weak sentiment labels from star ratings.
   star_to_sentiment: {1: "negative", 2: "negative", 3: "neutral", 4: "positive", 5: "positive"}
+  sentiment_classes: ["negative", "neutral", "positive"]
+  # Main topic of a review: key -> display name. Used for the hand-labeled gold set.
+  topics:
+    fees_late_payment: "Fees & late payment"
+    approval_limit: "Rejection & credit limit"
+    payments_installments: "Payments, installments & card"
+    account_verification: "Account, login & verification"
+    app_technical: "App bugs & updates"
+    customer_service: "Customer service"
+    merchant_refund: "Merchants & refunds"
+    ease_of_use: "Ease of use & convenience"
+    general: "General opinion, no specific topic"
+    other: "Other"
+  # Row flags in the gold set. Flagged rows are excluded from evaluation;
+  # the text of "personal_info" rows is removed when saving.
+  flags: ["unclear", "not_about_app", "personal_info"]
+
+gold:
+  # Stratified sample for hand labeling: app x language x star group.
+  # Negative and neutral reviews are over-sampled; ``weight`` restores
+  # population proportions when needed.
+  n_total: 400
+  source: "google_play"
+  languages: ["arabic", "english"]
+  star_group_shares: {negative: 0.40, neutral: 0.25, positive: 0.35}
+  id_hash_length: 12         # characters of the SHA-256 review-ID hash kept as gold_id
 
 eda:
   min_term_count: 30         # minimum document frequency for ranked n-grams
@@ -126,6 +152,7 @@ paths:
   cleaning_log: "reports/cleaning_log.csv"
   processed: "data/processed"
   labeled: "data/labeled"
+  gold: "data/labeled/gold.csv"
   external: "data/external"
   figures: "reports/figures"
   events: "data/external/events.csv"
