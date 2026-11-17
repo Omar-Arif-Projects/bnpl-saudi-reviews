@@ -2,14 +2,18 @@
 
 Steps:
 
-1. Load all raw Parquet files (Google Play and App Store).
-2. Drop repeated review IDs.
+1. Load all raw Parquet files (Google Play and App Store) and convert Google
+   Play times stored as local time to UTC (see
+   :func:`src.collect.play_store.fix_legacy_times`).
+2. Keep the latest copy of each review (reviews read again by a later
+   collection run are stored again).
 3. Drop double submissions (same source, app, text, rating and timestamp).
    Identical text from different reviews is retained.
 4. Drop empty reviews.
 5. Add normalized text, emoji, language and length features.
-6. Drop reviews with fewer than ``min_letters`` letters and no emoji.
-7. Set ``trainable = False`` for languages listed in ``exclude_from_training``.
+6. Drop reviews written only in scripts other than Arabic and Latin.
+7. Drop reviews with fewer than ``min_letters`` Arabic/Latin letters and no emoji.
+8. Set ``trainable = False`` for languages listed in ``exclude_from_training``.
 
 Outputs (paths from ``config.yaml``):
 
@@ -27,8 +31,9 @@ import re
 
 import pandas as pd
 
-from src.clean.language import LanguageRules, detect_language
+from src.clean.language import LanguageRules, detect_language, has_other_script
 from src.clean.normalize import extract_emojis, normalize_text, strip_emojis
+from src.collect.play_store import fix_legacy_times, latest_copies
 from src.config import get_logger, get_path, load_config
 
 logger = get_logger("clean.pipeline")
@@ -73,7 +78,7 @@ class RemovalLog:
 
 
 def load_raw_files() -> pd.DataFrame:
-    """Concatenate all raw review files.
+    """Concatenate all raw review files, with all times in UTC.
 
     Returns:
         Combined raw DataFrame.
@@ -85,7 +90,7 @@ def load_raw_files() -> pd.DataFrame:
     if not files:
         raise FileNotFoundError("No raw review files found; run src.collect.play_store first.")
     logger.info("Loading %d raw files", len(files))
-    return pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    return fix_legacy_times(pd.concat([pd.read_parquet(f) for f in files], ignore_index=True))
 
 
 def add_text_features(df: pd.DataFrame, rules: LanguageRules, repeat_max: int) -> pd.DataFrame:
@@ -127,8 +132,8 @@ def clean(raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     log = RemovalLog(len(raw))
 
     df = log.record(
-        "duplicate_id", "same source and review_id",
-        raw, raw.drop_duplicates(["source", "review_id"]),
+        "older_copy", "earlier copy of a review collected again (latest kept)",
+        raw, latest_copies(raw, ["source", "review_id"]),
     )
     df = log.record(
         "double_submission", "same source, app, text, rating and timestamp",
@@ -137,6 +142,11 @@ def clean(raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = log.record("empty", "empty text", df, df[df["text"].fillna("").str.strip() != ""])
 
     df = add_text_features(df, rules, int(cfg["repeat_max"]))
+    other_script = (df["lang"] == "other") & df["text"].map(has_other_script)
+    df = log.record(
+        "other_script", "only letters of scripts other than Arabic and Latin (e.g. Bengali)",
+        df, df[~other_script],
+    )
     has_content = ((df["n_letters"] >= int(cfg["min_letters"])) | (df["n_emoji"] > 0)) & (
         df["lang"] != "other"
     )

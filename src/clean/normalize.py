@@ -9,7 +9,8 @@
 3. Arabic-Indic and Extended Arabic-Indic digits to ASCII digits.
 4. Removal of Arabic diacritics and tatweel.
 5. Letter unification: آ أ إ ٱ -> ا, ة -> ه, ى -> ي.
-6. Character runs capped at ``repeat_max``.
+6. Runs of a repeated character capped at ``repeat_max``. Digits are not
+   capped, so numbers keep their value.
 7. Lowercasing and whitespace collapsing.
 """
 
@@ -33,6 +34,8 @@ WHITESPACE = re.compile(r"\s+")
 def collapse_repeats(text: str, repeat_max: int = 2) -> str:
     """Shorten runs of a repeated character to ``repeat_max`` characters.
 
+    Digits are left unchanged, so "1000" keeps its value.
+
     Args:
         text: Input text.
         repeat_max: Maximum run length to keep. Must be at least 1.
@@ -45,7 +48,7 @@ def collapse_repeats(text: str, repeat_max: int = 2) -> str:
     """
     if repeat_max < 1:
         raise ValueError("repeat_max must be >= 1")
-    pattern = re.compile(r"(.)\1{%d,}" % repeat_max, flags=re.DOTALL)
+    pattern = re.compile(r"(\D)\1{%d,}" % repeat_max)
     return pattern.sub(lambda m: m.group(1) * repeat_max, text)
 
 

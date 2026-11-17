@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.clean.language import LanguageRules, detect_language
+from src.clean.language import LanguageRules, detect_language, has_other_script
 from src.clean.normalize import collapse_repeats, extract_emojis, normalize_text
 from src.clean.pipeline import RemovalLog
 from src.config import load_config
@@ -28,6 +28,8 @@ def rules() -> LanguageRules:
         ("حلووووو", "حلوو"),                            # character runs
         ("GOOOOD   App", "good app"),                  # case, whitespace, runs
         ("١٠٠ ٪", "100 ٪"),                             # Arabic-Indic digits
+        ("١٠٠٠ ريال", "1000 ريال"),                      # digit runs are not capped
+        ("5000 SAR!!!!", "5000 sar!!"),                 # symbol runs are
         ("𝓣𝓱𝓪𝓷𝓴𝓼", "thanks"),                           # NFKC
         ("‏شكرا‎", "شكرا"),                   # bidi control characters
         ("", ""),
@@ -75,6 +77,13 @@ def test_normalize_keeps_emoji_joiner() -> None:
 )
 def test_detect_language(text: str, label: str, rules: LanguageRules) -> None:
     assert detect_language(text, rules) == label
+
+
+def test_has_other_script() -> None:
+    assert has_other_script("ভালো")
+    assert not has_other_script("ممتاز good 👍")
+    assert not has_other_script("ℂ")
+    assert not has_other_script(None)
 
 
 def test_removal_log_counts() -> None:

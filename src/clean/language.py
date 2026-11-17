@@ -17,6 +17,7 @@ Brand names are excluded from word counts unless they are the only words.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -107,3 +108,21 @@ def detect_language(text: str | None, rules: LanguageRules) -> str:
         return "arabic"
     n_arabizi = sum(is_arabizi_token(w, rules.arabizi_words) for w in latin)
     return "arabizi" if n_arabizi >= rules.arabizi_min_tokens else "english"
+
+
+def has_other_script(text: str | None) -> bool:
+    """Check whether a text contains letters of a script other than Arabic or Latin.
+
+    Args:
+        text: Review text.
+
+    Returns:
+        True if any letter is outside the Arabic and Latin scripts (for
+        example Bengali or Malayalam). Text is NFKC-normalized first, so
+        stylized Latin letters such as "ℂ" count as Latin.
+    """
+    return any(
+        unicodedata.category(ch).startswith("L")
+        and not unicodedata.name(ch, "").startswith(("LATIN", "ARABIC"))
+        for ch in unicodedata.normalize("NFKC", text or "")
+    )
