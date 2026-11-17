@@ -1,1 +1,1 @@
-"""Analysis helpers: EDA summaries, plotting, and (Phase 5) trends."""
+"""Analysis helpers: EDA summary tables and plotting."""

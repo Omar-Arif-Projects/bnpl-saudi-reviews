@@ -1,1 +1,1 @@
-"""Data collection modules (Google Play, Apple App Store RSS)."""
+"""Data collection: Google Play, Apple App Store RSS, KAPSARC and Google Trends exports."""

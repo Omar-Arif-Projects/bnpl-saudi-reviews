@@ -1,4 +1,4 @@
-# Central configuration for the BNPL Saudi reviews project.
+# Central configuration for the Tabby and Tamara reviews project.
 # All scripts read paths, IDs and parameters from here. No hard-coded values in code.
 
 project:
@@ -20,6 +20,8 @@ apps:
     app_store_id: "1533512531"
 
 collection:
+  # Store country passed to google-play-scraper. Google Play returns the same
+  # reviews for every country, so reviews are not limited to Saudi Arabia.
   country: "sa"
   languages: ["ar", "en"]
   play_store:
