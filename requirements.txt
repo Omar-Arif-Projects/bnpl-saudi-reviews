@@ -1,4 +1,4 @@
-# Phase 1: data collection
+# Data collection
 google-play-scraper>=1.2.7
 requests>=2.31
 pandas>=2.2
@@ -8,11 +8,12 @@ pyyaml>=6.0
 # 3.11+ lays out Arabic text correctly in charts (checked on 3.11.2)
 matplotlib>=3.11
 
-# Phase 2: cleaning and EDA
+# Cleaning, EDA and labeling
 emoji>=2.10
 scikit-learn>=1.4
 jupyter>=1.0
 ipykernel>=6.29
+ipywidgets>=8.0
 
 # Sentiment models
 # CPU-only PyTorch is enough for inference:
@@ -20,6 +21,8 @@ ipykernel>=6.29
 torch>=2.2
 transformers>=4.44
 sentencepiece>=0.2
+# Needed by the XLM-RoBERTa tokenizer
+protobuf>=4.25
 joblib>=1.3
 
 # Dev / tests
