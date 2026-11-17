@@ -1,4 +1,4 @@
-"""Tests for gold-set sampling, anonymization and the labeling widget."""
+"""Tests for gold-set sampling, text masking and the labeling widget."""
 
 from __future__ import annotations
 
