@@ -2,7 +2,7 @@
 
 An analysis of about 184,000 public app-store reviews of **Tabby** and **Tamara**, two Buy Now, Pay Later (BNPL) apps, using Arabic and English NLP. Google Play does not filter reviews by country, so the reviews come from users across the Gulf: Arabic reviews appear to come mostly from Saudi Arabia and English reviews mostly from the UAE.
 
-> **Status:** data collection, cleaning and exploratory analysis are complete. Sentiment models are built and are being evaluated on a hand-labeled test set. Topic modeling, the events analysis, an API and a web dashboard are planned (see [Roadmap](#roadmap)).
+> **Status:** data collection, cleaning and exploratory analysis are complete. Sentiment models are built and evaluated on a hand-labeled test set; error analysis is in progress. Topic modeling, the events analysis, an API and a web dashboard are planned (see [Roadmap](#roadmap)).
 
 ## Key findings
 
@@ -14,6 +14,7 @@ From 183,341 Google Play reviews (Arabic and English, October 2020 to November 2
 - **Tabby's negative reviews spiked in July–August 2026**, reaching 370 and 561 a month against 137–239 in the other months from October 2025 to October 2026. 85% of the Tabby reviews that mention a blank white screen fall in these two months.
 - **Both companies reply to about 90% of 1–2 star reviews.** The difference in overall reply rate (Tabby 56%, Tamara 11%) comes from Tabby also replying to positive reviews, which it has done since 2024. In 2025–26, Tamara answered 1–2 star reviews in a median of under an hour and Tabby in about 20 hours; in 2022–23 it was the reverse (Tabby 2–5 hours, Tamara 36–39 hours).
 - **Customer service is the most common complaint phrase**, appearing in about 8% of negative reviews for both apps. Phrases typical of negative reviews also point to a blank white screen after app updates (Tabby, 2% of negative reviews) and to late fees and the first payment (Tamara, 1–2% each).
+- **A simple model matches the pretrained ones.** On 389 hand-labeled reviews, a TF-IDF baseline trained on star ratings reaches a macro-F1 of 0.73, against 0.77 for a multilingual XLM-RoBERTa model; on Arabic reviews, 0.70 against 0.68 for CAMeLBERT-DA and 0.74 for XLM-RoBERTa. None of the differences is statistically clear. All models separate negative from positive reviews well (0.93–0.98); neutral reviews are the hard part.
 
 ![Positive and negative reviews per month](reports/figures/eda_reviews_by_sentiment.png)
 
@@ -51,17 +52,38 @@ More charts and tables are in [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb)
 
 **Language detection.** Language is detected from the text rather than from the store's query language, because each query bucket contains about 2,000 reviews in the other language. Reviews are tagged as Arabic (50%), English (47%), emoji only (2.6%) or mixed (0.1%). No Arabizi (Arabic written in Latin letters) was found. Emoji-only reviews are included in the analysis but excluded from text-model training.
 
-**Gold test set.** 400 Google Play reviews are labeled by hand for sentiment and main topic, with the star rating hidden. The sample is stratified by app, language and star group (40% 1–2 star, 25% 3 star, 35% 4–5 star per app and language), so negative and neutral reviews are over-sampled; each row carries a weight that restores population proportions. Review IDs are replaced by a hash, e-mail addresses, URLs and long numbers are masked, and rows flagged as containing personal information have their text removed. Gold reviews are excluded from model training. Once labeling is complete, 50 random rows will be labeled a second time without seeing the first labels, to measure consistency (Cohen's kappa).
+**Gold test set.** 400 Google Play reviews are labeled by hand for sentiment and main topic, with the star rating hidden. The sample is stratified by app, language and star group (40% 1–2 star, 25% 3 star, 35% 4–5 star per app and language), so negative and neutral reviews are over-sampled; each row carries a weight that restores population proportions. Review IDs are replaced by a hash, e-mail addresses, URLs and long numbers are masked, and rows flagged as containing personal information have their text removed. Gold reviews are excluded from model training. A reported problem counts as negative even when it is written calmly; neutral is used for questions, suggestions without a complaint, factual statements and unclear or balanced reviews. 11 reviews flagged as unclear or not about the app are left out, leaving 389 (140 negative, 19 neutral, 230 positive). To check consistency, 50 random rows were labeled a second time by the same person without seeing the first labels: of the 48 usable rows, Cohen's kappa was 0.92 for sentiment and 0.84 for topic.
 
-**Sentiment models.** A TF-IDF baseline (character 2–5-grams and word 1–2-grams, logistic regression) is trained on star labels (1–2 stars negative, 3 neutral, 4–5 positive). Its class weighting was chosen on a held-out dev split of star-labeled reviews: square-root balanced weights reached a dev macro-F1 of 0.60, against 0.57 without weights and 0.54 with fully balanced weights, which predicted neutral for 20% of dev reviews when only 2% are neutral. Two pretrained models are used without further training: CAMeLBERT-DA sentiment (Arabic only) and a multilingual XLM-RoBERTa sentiment model (Arabic and English), each pinned to a fixed revision. Results will be reported on the gold set: macro-F1 with stratified bootstrap intervals, population-weighted metrics, a negative-vs-positive view, and paired bootstrap intervals for the difference between models.
+**Sentiment models.** A TF-IDF baseline (character 2–5-grams and word 1–2-grams, logistic regression) is trained on star labels (1–2 stars negative, 3 neutral, 4–5 positive). Its class weighting was chosen on a held-out dev split of star-labeled reviews: square-root balanced weights reached a dev macro-F1 of 0.60, against 0.57 without weights and 0.54 with fully balanced weights, which predicted neutral for 20% of dev reviews when only 2% are neutral. Two pretrained models are used without further training: CAMeLBERT-DA sentiment (Arabic only) and a multilingual XLM-RoBERTa sentiment model (Arabic and English), each pinned to a fixed revision. Results on the gold set are reported as macro-F1 with stratified bootstrap intervals, population-weighted metrics, a negative-vs-positive view, and paired bootstrap intervals for the difference between models.
 
 **Distinctive phrases.** Words and two-word phrases are ranked with the weighted log-odds ratio with an informative Dirichlet prior (Monroe, Colaresi & Quinn, 2008), comparing 1–2 star with 4–5 star reviews, separately for each app and language. Counts are the number of reviews that contain a phrase, and the prior is weak, so the ranking is close to a smoothed log-odds ratio. It shows which phrases separate negative from positive reviews, not which are most frequent; how often complaint phrases occur is counted separately.
+
+## Model results
+
+Sentiment on the 389 usable gold reviews (hand labels: negative, neutral, positive), with 95% stratified bootstrap intervals. The population-weighted column reweights the sample to the real mix of reviews, in which 5-star reviews dominate. The last column uses only reviews labeled negative or positive and compares each model's negative and positive probabilities.
+
+| Model | Reviews | Macro-F1 (95% CI) | Population-weighted macro-F1 | Negative vs. positive macro-F1 |
+|---|---|---|---|---|
+| TF-IDF baseline | All (389) | 0.73 (0.66–0.80) | 0.66 | 0.95 |
+| XLM-RoBERTa | All (389) | 0.77 (0.71–0.83) | 0.81 | 0.96 |
+| TF-IDF baseline | Arabic (196) | 0.70 (0.60–0.78) | 0.64 | 0.93 |
+| CAMeLBERT-DA | Arabic (196) | 0.68 (0.61–0.75) | 0.71 | 0.95 |
+| XLM-RoBERTa | Arabic (196) | 0.74 (0.66–0.81) | 0.82 | 0.94 |
+| TF-IDF baseline | English (193) | 0.77 (0.63–0.88) | 0.76 | 0.97 |
+| XLM-RoBERTa | English (193) | 0.83 (0.68–0.93) | 0.68 | 0.98 |
+
+- **No model is clearly better.** The paired bootstrap interval for every difference between two models includes zero, with and without population weights. For XLM-RoBERTa against the baseline on all reviews the difference is +0.04 (95% CI −0.05 to 0.12). The baseline was trained on star-labeled reviews of the same two apps, while the pretrained models were trained on other kinds of text, mainly tweets.
+- **Neutral is the hard class.** Only 19 of the 389 reviews are neutral by hand, and the models' neutral F1 is 0.29–0.57, against 0.79–0.98 for negative and positive. Most of the differences between models, and the width of the intervals, come from this class. The weighted figures rest on very few neutral reviews and have wide intervals, so they point in different directions for Arabic and English.
+
+![Confusion matrices on the gold set](reports/figures/sentiment_confusion_gold.png)
+
+Full results are in [`reports/sentiment_results_gold.csv`](reports/sentiment_results_gold.csv), with the paired differences in [`reports/sentiment_paired_gold.csv`](reports/sentiment_paired_gold.csv).
 
 ## Limitations
 
 - App reviews are not a random sample of users. Unhappy users are more likely to write long reviews, and in-app rating prompts affect who reviews; the Tamara change in February 2026 suggests such an effect.
 - Google Play reviews cannot be limited to one country, and few reviews say where the reviewer is.
-- Star ratings are a noisy measure of sentiment. Final model results will be reported on a hand-labeled test set, labeled by one person.
+- Star ratings are a noisy measure of sentiment: in the gold sample, about a fifth of 1–2 star reviews and about two thirds of 3-star reviews read as positive. Model results are therefore reported on hand labels, which come from one labeler; a blind relabel of 50 reviews measures that person's consistency, not agreement between different labelers.
 - Review dates are the latest edit of a review, and reply dates the latest edit of a reply, so a response time can be longer or shorter than the time to the first reply. Replies dated before the review's latest edit (1.3% for Tabby, 2.7% for Tamara) are excluded.
 - "تمارا" is also a given name, so part of Tamara's search interest is unrelated to the app.
 - There is no access to company transaction data. Results describe what users write, not how the companies perform.
@@ -78,7 +100,7 @@ More charts and tables are in [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb)
 │   └── analysis/            # EDA tables and chart helpers
 ├── notebooks/               # collection checks, EDA and gold-set labeling
 ├── reports/                 # cleaning log, model results and figures
-├── data/                    # raw and processed data (not committed), external sources
+├── data/                    # raw and processed data (not committed), hand-labeled test set, external sources
 └── tests/
 ```
 
@@ -114,7 +136,7 @@ All settings (app IDs, languages, rate limits, paths, cleaning thresholds, model
 
 - [x] Data collection
 - [x] Cleaning, normalization and exploratory analysis
-- [ ] Sentiment models: TF-IDF baseline vs. pretrained transformers, evaluated on a hand-labeled test set (models built, labeling in progress)
+- [ ] Sentiment models: TF-IDF baseline vs. pretrained transformers, evaluated on a hand-labeled test set (models evaluated, error analysis in progress)
 - [ ] Topic modeling of complaints and praise
 - [ ] Sentiment trends compared with regulation, product and seasonal events
 - [ ] Prediction API (FastAPI)
@@ -122,4 +144,4 @@ All settings (app IDs, languages, rate limits, paths, cleaning thresholds, model
 
 ## Data and ethics
 
-Only public review text and ratings are used. No names or personal data are stored or published, and raw review data is not committed or redistributed (`data/raw/` and `data/processed/` are gitignored). The repository contains only code, aggregate tables, figures and, later, the hand-labeled test set. In that set, review IDs are replaced by hashes and e-mail addresses, URLs and long numbers are masked, but the text itself is public review text. Results describe user opinions, not company performance.
+Only public review text and ratings are used. No names or personal data are stored or published, and raw review data is not committed or redistributed (`data/raw/` and `data/processed/` are gitignored). The repository contains only code, aggregate tables, figures and the hand-labeled test set. In that set, review IDs are replaced by hashes and e-mail addresses, URLs and long numbers are masked, but the text itself is public review text. Results describe user opinions, not company performance.
