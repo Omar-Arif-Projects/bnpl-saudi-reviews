@@ -1,0 +1,6 @@
+dataset,subset,metric,model_a,model_b,difference,ci_low,ci_high
+dev_balanced_star_labels,all,macro_f1,baseline,xlmr,-0.0038,-0.0256,0.0189
+dev_balanced_star_labels,arabic,macro_f1,baseline,camelbert,0.0441,0.0052,0.0797
+dev_balanced_star_labels,arabic,macro_f1,baseline,xlmr,0.0128,-0.0211,0.0500
+dev_balanced_star_labels,arabic,macro_f1,camelbert,xlmr,-0.0312,-0.0578,-0.0055
+dev_balanced_star_labels,english,macro_f1,baseline,xlmr,-0.0170,-0.0443,0.0093

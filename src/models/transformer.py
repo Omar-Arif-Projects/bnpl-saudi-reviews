@@ -6,7 +6,9 @@ Models are listed under ``models.transformers.models`` in ``config.yaml``:
 - ``xlmr``: multilingual XLM-RoBERTa sentiment (Arabic and English).
 
 Neither model is trained on this data. Each model only scores reviews in its
-configured languages; other rows get no prediction.
+configured languages; other rows get no prediction. Models are loaded at the
+Hugging Face commit given by ``revision``, so results do not change when a
+model is updated on the Hub.
 
 Outputs:
 
@@ -35,33 +37,54 @@ from src.models.data import comparison_sample, load_star_labeled, split_dev
 logger = get_logger("models.transformer")
 
 
-class ZeroShotSentiment:
-    """Wrapper around a Hugging Face sequence-classification sentiment model.
+def label_order(id2label: dict[int, str], classes: list[str]) -> list[int]:
+    """Map project classes to a model's output columns.
 
     Args:
-        name: Model name on the Hugging Face Hub.
-        classes: Project sentiment classes; model labels are matched to them
-            case-insensitively.
-        batch_size: Texts per forward pass.
-        max_length: Maximum tokens per text.
+        id2label: The model's ``config.id2label`` (output index -> label name).
+        classes: Project sentiment classes, in the desired column order.
+
+    Returns:
+        Output index for each class in ``classes``; label names are matched
+        case-insensitively.
 
     Raises:
         ValueError: If the model's labels do not cover ``classes``.
     """
+    labels = {int(i): str(lab).lower() for i, lab in id2label.items()}
+    missing = set(classes) - set(labels.values())
+    if missing:
+        raise ValueError(f"Model labels {labels} do not include {sorted(missing)}")
+    return [next(i for i, lab in labels.items() if lab == c) for c in classes]
 
-    def __init__(self, name: str, classes: list[str], batch_size: int, max_length: int) -> None:
+
+class ZeroShotSentiment:
+    """Wrapper around a Hugging Face sequence-classification sentiment model."""
+
+    def __init__(
+        self, name: str, classes: list[str], batch_size: int, max_length: int, revision: str | None = None,
+    ) -> None:
+        """Load the tokenizer and model and match the model's labels to ``classes``.
+
+        Args:
+            name: Model name on the Hugging Face Hub.
+            classes: Project sentiment classes; model labels are matched to them
+                case-insensitively.
+            batch_size: Texts per forward pass.
+            max_length: Maximum tokens per text.
+            revision: Hub commit to load; None loads the latest version.
+
+        Raises:
+            ValueError: If the model's labels do not cover ``classes``.
+        """
         self.name = name
         self.classes = classes
         self.batch_size = batch_size
         self.max_length = max_length
-        self.tokenizer = AutoTokenizer.from_pretrained(name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(name).eval()
-        labels = {i: str(lab).lower() for i, lab in self.model.config.id2label.items()}
-        missing = set(classes) - set(labels.values())
-        if missing:
-            raise ValueError(f"{name} has labels {labels}, missing {missing}")
+        self.tokenizer = AutoTokenizer.from_pretrained(name, revision=revision)
+        self.model = AutoModelForSequenceClassification.from_pretrained(name, revision=revision).eval()
         # Column order of the model's logits, rearranged to ``classes`` order.
-        self.order = [next(i for i, lab in labels.items() if lab == c) for c in classes]
+        self.order = label_order(self.model.config.id2label, classes)
 
     @torch.inference_mode()
     def predict_proba(self, texts: list[str]) -> np.ndarray:
@@ -131,8 +154,10 @@ def run() -> None:
     gold = gold.join(predict_frame(baseline, gold["text"]).add_prefix("baseline_"))
 
     for key, spec in t["models"].items():
-        logger.info("Loading %s (%s)", key, spec["name"])
-        model = ZeroShotSentiment(spec["name"], classes, t["batch_size"], t["max_length"])
+        logger.info("Loading %s (%s @ %s)", key, spec["name"], spec.get("revision"))
+        model = ZeroShotSentiment(
+            spec["name"], classes, t["batch_size"], t["max_length"], revision=spec.get("revision"),
+        )
         sample = score(sample, key, model, spec["languages"])
         gold = score(gold, key, model, spec["languages"])
         logger.info("%s: scored %d dev and %d gold reviews", key,

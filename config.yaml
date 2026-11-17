@@ -139,6 +139,8 @@ models:
   # Balanced comparison sample from the dev split: n per language x sentiment.
   compare_languages: ["arabic", "english"]
   compare_per_cell: 500
+  # Language subsets for evaluation: name -> languages (null = all rows).
+  eval_subsets: {all: null, arabic: ["arabic"], english: ["english"]}
   baseline:
     char_ngram: [2, 5]       # char_wb n-grams on normalized text
     word_ngram: [1, 2]
@@ -147,7 +149,13 @@ models:
     max_features_word: 100000
     sublinear_tf: true
     C: 1.0
-    class_weight: "balanced"
+    # One of class_weight_options. Chosen with
+    # ``python -m src.models.baseline --compare-class-weights``: the option with
+    # the highest macro-F1 on the full dev split (star labels); options within
+    # 0.005 of the best are decided by how close the predicted class shares are
+    # to the true shares. The gold set is never used for this choice.
+    class_weight: "sqrt_balanced"
+    class_weight_options: [null, "sqrt_balanced", "balanced"]
     max_iter: 3000
   transformers:
     batch_size: 32
@@ -155,11 +163,13 @@ models:
     models:
       camelbert:
         name: "CAMeL-Lab/bert-base-arabic-camelbert-da-sentiment"
+        revision: "b0df630d23e5aa5f8a326017605337f6d0863ecd"   # Hugging Face commit
         languages: ["arabic"]    # Arabic-only model
       xlmr:
         name: "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+        revision: "f2f1202b1bdeb07342385c3f807f9c07cd8f5cf8"   # Hugging Face commit
         languages: ["arabic", "english", "mixed"]
-  bootstrap_samples: 1000    # for macro-F1 confidence intervals
+  bootstrap_samples: 1000    # resamples for confidence intervals
 
 eda:
   min_term_count: 30         # minimum document frequency for ranked n-grams
@@ -198,8 +208,12 @@ paths:
   models: "models"
   dev_predictions: "data/processed/dev_predictions.parquet"
   gold_predictions: "reports/gold_predictions.csv"
+  baseline_class_weights: "reports/baseline_class_weights_dev.csv"
   results_dev: "reports/sentiment_results_dev.csv"
+  results_dev_paired: "reports/sentiment_paired_dev.csv"
   results_gold: "reports/sentiment_results_gold.csv"
+  results_gold_paired: "reports/sentiment_paired_gold.csv"
+  gold_agreement: "reports/gold_agreement.csv"
   external: "data/external"
   figures: "reports/figures"
   events: "data/external/events.csv"
