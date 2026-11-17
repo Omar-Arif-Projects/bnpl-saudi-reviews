@@ -159,3 +159,50 @@ def test_baseline_accepts_raw_text(text: str | None) -> None:
     from src.clean.normalize import normalize_batch
 
     assert isinstance(normalize_batch([text])[0], str)
+
+
+def error_frame() -> pd.DataFrame:
+    """Gold-like rows: ``a`` scores every row, ``b`` only Arabic rows."""
+    return pd.DataFrame({
+        "lang": ["arabic", "arabic", "english", "english"],
+        "text": ["ممتاز", "لا يوجد تذكير بالدفع", "please add stc pay", "good"],
+        "sentiment": ["positive", "negative", "neutral", "positive"],
+        "star_sentiment": ["positive", "neutral", "neutral", "negative"],
+        "a_pred": ["positive", "neutral", "positive", "positive"],
+        "b_pred": ["positive", "positive", None, None],
+    })
+
+
+def test_length_group_labels() -> None:
+    from src.models.error_analysis import length_group
+
+    groups = length_group(pd.Series(["a", "a b c d", "a " * 12, None]), bins=[3, 10])
+    assert groups.iloc[:3].tolist() == ["1-3", "4-10", "11+"]
+    assert pd.isna(groups.iloc[3])                 # empty text has no group
+
+
+def test_error_table_counts_scored_rows_only() -> None:
+    from src.models.error_analysis import error_table
+
+    table = error_table(error_frame(), "lang").set_index(["model", "lang"])
+    assert table.loc[("a", "arabic"), ["n", "errors"]].tolist() == [2, 1]
+    assert table.loc[("a", "english"), ["n", "errors"]].tolist() == [2, 1]
+    assert ("b", "english") not in table.index
+
+    df = error_frame()
+    df["length"] = pd.Categorical(["4-10", "1-3", "11+", "1-3"], categories=["1-3", "4-10", "11+"], ordered=True)
+    pivot = error_table(df, "length").pivot(index="length", columns="model", values="n")
+    assert pivot.index.tolist() == ["1-3", "4-10", "11+"]          # category order, not alphabetical
+
+
+def test_star_vs_hand_and_wrong_for_all() -> None:
+    from src.models.error_analysis import predictions_for, star_vs_hand, wrong_for_all
+
+    df = error_frame()
+    table = star_vs_hand(df).set_index("model")
+    # Rows 1 and 3 have hand labels that differ from the star label.
+    assert table.loc["a", ["n", "matches_hand", "matches_star", "matches_neither"]].tolist() == [2, 1, 1, 0]
+    assert table.loc["b", ["n", "matches_neither"]].tolist() == [1, 1]
+    assert wrong_for_all(df)["text"].tolist() == ["لا يوجد تذكير بالدفع", "please add stc pay"]
+    neutral = predictions_for(df, "neutral")
+    assert neutral.loc["a", "positive"] == 1 and neutral.loc["b"].sum() == 0

@@ -2,7 +2,7 @@
 
 An analysis of about 184,000 public app-store reviews of **Tabby** and **Tamara**, two Buy Now, Pay Later (BNPL) apps, using Arabic and English NLP. Google Play does not filter reviews by country, so the reviews come from users across the Gulf: Arabic reviews appear to come mostly from Saudi Arabia and English reviews mostly from the UAE.
 
-> **Status:** data collection, cleaning and exploratory analysis are complete. Sentiment models are built and evaluated on a hand-labeled test set; error analysis is in progress. Topic modeling, the events analysis, an API and a web dashboard are planned (see [Roadmap](#roadmap)).
+> **Status:** data collection, cleaning and exploratory analysis are complete. Sentiment models are built and evaluated on a hand-labeled test set, with an error analysis. Topic modeling, the events analysis, an API and a web dashboard are planned (see [Roadmap](#roadmap)).
 
 ## Key findings
 
@@ -74,6 +74,9 @@ Sentiment on the 389 usable gold reviews (hand labels: negative, neutral, positi
 
 - **No model is clearly better.** The paired bootstrap interval for every difference between two models includes zero, with and without population weights. For XLM-RoBERTa against the baseline on all reviews the difference is +0.04 (95% CI −0.05 to 0.12). The baseline was trained on star-labeled reviews of the same two apps, while the pretrained models were trained on other kinds of text, mainly tweets.
 - **Neutral is the hard class.** Only 19 of the 389 reviews are neutral by hand, and the models' neutral F1 is 0.29–0.57, against 0.79–0.98 for negative and positive. Most of the differences between models, and the width of the intervals, come from this class. The weighted figures rest on very few neutral reviews and have wide intervals, so they point in different directions for Arabic and English.
+- **The models make different mistakes.** The pretrained models most often read a calmly written complaint as neutral (22 of CAMeLBERT's 36 errors and 16 of XLM-RoBERTa's 36), for example "ليس لديهم تواصل عن طريق الواتساب" ("they have no WhatsApp contact"). The baseline almost never predicts neutral, because only 2% of its star-labeled training reviews have 3 stars, and reads polite requests such as "please include stc pay as one payment option" as positive.
+- **Noisy star labels did not carry over.** On the 134 gold reviews whose hand label differs from the star group, the baseline follows the text (116 reviews) rather than the stars (12). It labels 34 of the 35 positive-text 1–2 star reviews as positive.
+- **Typical hard cases** are Arabic reviews (baseline 25 errors on 196 Arabic reviews vs. 13 on 193 English; XLM-RoBERTa 27 vs. 9), mixed praise-and-complaint reviews, and dialect or misspelled words ("ماجازلي", "help full"). No sarcastic review appears among the errors. Examples are in [`notebooks/03_sentiment_models.ipynb`](notebooks/03_sentiment_models.ipynb).
 
 ![Confusion matrices on the gold set](reports/figures/sentiment_confusion_gold.png)
 
@@ -98,7 +101,7 @@ Full results are in [`reports/sentiment_results_gold.csv`](reports/sentiment_res
 │   ├── label/               # gold-set sampling and labeling widget
 │   ├── models/              # sentiment baseline, pretrained transformers, evaluation
 │   └── analysis/            # EDA tables and chart helpers
-├── notebooks/               # collection checks, EDA and gold-set labeling
+├── notebooks/               # collection checks, EDA, gold-set labeling, sentiment error analysis
 ├── reports/                 # cleaning log, model results and figures
 ├── data/                    # raw and processed data (not committed), hand-labeled test set, external sources
 └── tests/
@@ -126,6 +129,7 @@ python -m src.models.baseline --compare-class-weights  # choose class weighting 
 python -m src.models.baseline                      # train the TF-IDF baseline
 python -m src.models.transformer                   # score with pretrained transformers
 python -m src.models.evaluate                      # metrics on dev and gold sets
+jupyter notebook notebooks/03_sentiment_models.ipynb  # results and error analysis
 
 pytest
 ```
@@ -136,7 +140,7 @@ All settings (app IDs, languages, rate limits, paths, cleaning thresholds, model
 
 - [x] Data collection
 - [x] Cleaning, normalization and exploratory analysis
-- [ ] Sentiment models: TF-IDF baseline vs. pretrained transformers, evaluated on a hand-labeled test set (models evaluated, error analysis in progress)
+- [x] Sentiment models: TF-IDF baseline vs. pretrained transformers, evaluated on a hand-labeled test set, with error analysis
 - [ ] Topic modeling of complaints and praise
 - [ ] Sentiment trends compared with regulation, product and seasonal events
 - [ ] Prediction API (FastAPI)
