@@ -1,0 +1,11 @@
+dataset,model,subset,n,macro_f1,accuracy,precision_negative,recall_negative,f1_negative,precision_neutral,recall_neutral,f1_neutral,precision_positive,recall_positive,f1_positive,ci_low,ci_high
+dev_full_star_labels,baseline,all,17813,0.5395,0.7582,0.6401,0.7307,0.6824,0.0426,0.4113,0.0772,0.9740,0.7684,0.8591,0.5312,0.5480
+dev_full_star_labels,baseline,arabic,9229,0.5663,0.8530,0.6026,0.7417,0.6649,0.0673,0.3550,0.1132,0.9750,0.8722,0.9208,0.5534,0.5798
+dev_full_star_labels,baseline,english,8573,0.5173,0.6561,0.6903,0.7185,0.7041,0.0344,0.4581,0.0641,0.9725,0.6564,0.7838,0.5063,0.5287
+dev_balanced_star_labels,baseline,all,2372,0.6300,0.6914,0.8800,0.7260,0.7956,0.3060,0.4113,0.3509,0.7268,0.7610,0.7435,0.6106,0.6480
+dev_balanced_star_labels,baseline,arabic,1169,0.6605,0.7442,0.8612,0.7320,0.7914,0.4138,0.3550,0.3822,0.7412,0.8880,0.8080,0.6304,0.6906
+dev_balanced_star_labels,baseline,english,1203,0.6007,0.6401,0.9000,0.7200,0.8000,0.2620,0.4581,0.3333,0.7076,0.6340,0.6688,0.5758,0.6265
+dev_balanced_star_labels,camelbert,arabic,1169,0.5473,0.6621,0.8554,0.5680,0.6827,0.1556,0.1657,0.1605,0.7032,0.9240,0.7986,0.5215,0.5728
+dev_balanced_star_labels,xlmr,all,2372,0.5700,0.6994,0.8756,0.6760,0.7630,0.2353,0.1290,0.1667,0.6698,0.9350,0.7805,0.5511,0.5888
+dev_balanced_star_labels,xlmr,arabic,1169,0.5785,0.6980,0.8579,0.6520,0.7409,0.2222,0.1775,0.1974,0.7034,0.9200,0.7972,0.5513,0.6064
+dev_balanced_star_labels,xlmr,english,1203,0.5607,0.7007,0.8929,0.7000,0.7848,0.2609,0.0887,0.1324,0.6402,0.9500,0.7649,0.5373,0.5851

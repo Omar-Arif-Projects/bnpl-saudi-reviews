@@ -16,7 +16,7 @@ data/processed/*
 
 # Logs, models, caches
 logs/
-models/
+/models/
 *.pt
 *.bin
 *.safetensors

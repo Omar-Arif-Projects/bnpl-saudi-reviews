@@ -69,6 +69,7 @@ More charts and tables are in [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb)
 │   ├── collect/             # Google Play, App Store RSS, KAPSARC, Google Trends
 │   ├── clean/               # normalization, language detection, cleaning pipeline
 │   ├── label/               # gold-set sampling and labeling widget
+│   ├── models/              # sentiment baseline, pretrained transformers, evaluation
 │   └── analysis/            # EDA tables and chart helpers
 ├── notebooks/               # collection checks, EDA and gold-set labeling
 ├── reports/                 # cleaning log and figures
@@ -92,6 +93,9 @@ python -m src.clean.pipeline                       # clean and normalize reviews
 jupyter notebook notebooks/02_eda.ipynb            # exploratory analysis
 python -m src.label.gold --sample                  # draw the gold-set sample
 jupyter notebook notebooks/gold_labeling.ipynb     # label it
+python -m src.models.baseline                      # train the TF-IDF baseline
+python -m src.models.transformer                   # score with pretrained transformers
+python -m src.models.evaluate                      # metrics on dev and gold sets
 
 pytest
 ```

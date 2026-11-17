@@ -121,6 +121,37 @@ gold:
   star_group_shares: {negative: 0.40, neutral: 0.25, positive: 0.35}
   id_hash_length: 12         # characters of the SHA-256 review-ID hash kept as gold_id
 
+models:
+  # Training data: trainable Google Play reviews in these languages, gold set
+  # excluded, labeled from star ratings.
+  source: "google_play"
+  languages: ["arabic", "english", "mixed"]
+  dev_share: 0.1             # stratified random hold-out for star-label metrics
+  # Balanced comparison sample from the dev split: n per language x sentiment.
+  compare_languages: ["arabic", "english"]
+  compare_per_cell: 500
+  baseline:
+    char_ngram: [2, 5]       # char_wb n-grams on normalized text
+    word_ngram: [1, 2]
+    min_df: 3
+    max_features_char: 300000
+    max_features_word: 100000
+    sublinear_tf: true
+    C: 1.0
+    class_weight: "balanced"
+    max_iter: 3000
+  transformers:
+    batch_size: 32
+    max_length: 128
+    models:
+      camelbert:
+        name: "CAMeL-Lab/bert-base-arabic-camelbert-da-sentiment"
+        languages: ["arabic"]    # Arabic-only model
+      xlmr:
+        name: "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+        languages: ["arabic", "english", "mixed"]
+  bootstrap_samples: 1000    # for macro-F1 confidence intervals
+
 eda:
   min_term_count: 30         # minimum document frequency for ranked n-grams
   top_n_terms: 15
@@ -153,6 +184,11 @@ paths:
   processed: "data/processed"
   labeled: "data/labeled"
   gold: "data/labeled/gold.csv"
+  models: "models"
+  dev_predictions: "data/processed/dev_predictions.parquet"
+  gold_predictions: "reports/gold_predictions.csv"
+  results_dev: "reports/sentiment_results_dev.csv"
+  results_gold: "reports/sentiment_results_gold.csv"
   external: "data/external"
   figures: "reports/figures"
   events: "data/external/events.csv"

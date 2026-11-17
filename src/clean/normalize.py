@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 
 import emoji
 
@@ -79,6 +80,19 @@ def normalize_text(text: str | None, repeat_max: int = 2) -> str:
     text = normalize_arabic(text)
     text = collapse_repeats(text, repeat_max)
     return WHITESPACE.sub(" ", text.lower()).strip()
+
+
+def normalize_batch(texts: Iterable[str | None], repeat_max: int = 2) -> list[str]:
+    """Apply :func:`normalize_text` to a sequence of texts.
+
+    Args:
+        texts: Raw review texts.
+        repeat_max: Maximum run length of a repeated character.
+
+    Returns:
+        List of normalized texts.
+    """
+    return [normalize_text(t, repeat_max) for t in texts]
 
 
 def extract_emojis(text: str | None) -> list[str]:
