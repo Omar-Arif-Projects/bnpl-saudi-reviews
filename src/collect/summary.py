@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.collect.play_store import fix_legacy_times, latest_copies
 from src.config import get_path
 
 
 def load_raw(pattern: str = "*_reviews_*.parquet") -> pd.DataFrame:
-    """Load and concatenate all raw review parquet files, de-duplicated per source.
+    """Load all raw review parquet files, keeping the latest copy of each review.
+
+    Google Play times stored as local time are converted to UTC.
 
     Args:
         pattern: Glob pattern inside ``paths.raw``.
@@ -19,8 +22,8 @@ def load_raw(pattern: str = "*_reviews_*.parquet") -> pd.DataFrame:
     files = sorted(get_path("raw").glob(pattern))
     if not files:
         raise FileNotFoundError(f"No raw files matching {pattern!r}; run src.collect.play_store first.")
-    df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
-    return df.drop_duplicates(["source", "review_id"]).reset_index(drop=True)
+    df = fix_legacy_times(pd.concat([pd.read_parquet(f) for f in files], ignore_index=True))
+    return latest_copies(df, ["source", "review_id"])
 
 
 def collection_summary(df: pd.DataFrame) -> pd.DataFrame:

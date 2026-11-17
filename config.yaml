@@ -28,6 +28,14 @@ collection:
     max_retries: 3
     retry_backoff_seconds: 10
     max_reviews_per_lang: null   # null = everything available; set an int for quick tests
+    # Days before the resume point that are read again on each run, so edits
+    # and new developer replies are picked up.
+    resume_overlap_days: 7
+    # Rows collected before this time hold the collecting machine's local time
+    # stored as UTC; the cleaning pipeline converts them to UTC.
+    legacy_local_time:
+      collected_before: "2026-11-16T00:00:00Z"
+      timezone: "Asia/Riyadh"
   app_store:
     enabled: true
     max_pages: 10            # Apple RSS exposes at most 10 pages x 50 reviews (recent only)
@@ -184,6 +192,7 @@ paths:
   processed: "data/processed"
   labeled: "data/labeled"
   gold: "data/labeled/gold.csv"
+  play_state: "data/raw/play_state.json"
   models: "models"
   dev_predictions: "data/processed/dev_predictions.parquet"
   gold_predictions: "reports/gold_predictions.csv"
