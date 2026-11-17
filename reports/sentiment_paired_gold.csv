@@ -1,0 +1,11 @@
+dataset,subset,metric,model_a,model_b,difference,ci_low,ci_high
+gold,all,macro_f1,baseline,xlmr,-0.0424,-0.1240,0.0464
+gold,all,macro_f1_weighted,baseline,xlmr,-0.1524,-0.2558,0.0567
+gold,arabic,macro_f1,baseline,camelbert,0.0176,-0.1082,0.1426
+gold,arabic,macro_f1,baseline,xlmr,-0.0419,-0.1480,0.0755
+gold,arabic,macro_f1,camelbert,xlmr,-0.0594,-0.1360,0.0227
+gold,arabic,macro_f1_weighted,baseline,camelbert,-0.0695,-0.2024,0.1422
+gold,arabic,macro_f1_weighted,baseline,xlmr,-0.1802,-0.2930,0.0506
+gold,arabic,macro_f1_weighted,camelbert,xlmr,-0.1107,-0.2555,0.0094
+gold,english,macro_f1,baseline,xlmr,-0.0583,-0.2012,0.0925
+gold,english,macro_f1_weighted,baseline,xlmr,0.0814,-0.1722,0.2088
