@@ -187,6 +187,19 @@ eda:
     "ومن", "فقط", "ايضا", "جدا", "الله", "تابي", "تمارا", "تطبيق", "التطبيق", "البرنامج", "برنامج",
   ]
   stopwords_en_extra: ["app", "tabby", "tamara", "application", "im", "dont", "it's", "i'm", "don't", "use", "using"]
+  # Complaint phrases counted in reviews (regular expressions on normalized text).
+  complaint_phrases:
+    customer_service: 'خدمه العملاء|customer service|customer support|customer care'
+    white_screen: 'صفحه بيضا|شاشه بيضا|white screen|blank screen'
+    late_fees: 'رسوم التاخير|غرامه|late fee|late payment fee|penalt'
+    first_payment: 'الدفعه الاولي|first payment|first installment|down payment'
+  # Place names and currencies that indicate a reviewer's country (regular
+  # expressions on normalized text). Arabic words may carry a one- or
+  # two-letter prefix (و, ب, ل, ف, ك, ال, ...).
+  country_markers:
+    saudi_arabia: '\b(?:sar|sr|riyals?|ksa|saudi\w*|riyadh|jeddah|nafath|absher|rajhi)\b|\b(?:و|ب|ل|ف|ك|ال|بال|وال|لل|فال)?(?:ريال|سعودي\w*|السعوديه|الرياض|جده|نفاذ|ابشر|الراجحي)\b'
+    uae: '\b(?:aed|dirhams?|uae|dubai|abu ?dhabi|sharjah|emirates|emirati)\b|\b(?:و|ب|ل|ف|ك|ال|بال|وال|لل|فال)?(?:درهم|دراهم|الامارات|امارات|اماراتي\w*|دبي|ابوظبي|ابو ظبي|الشارقه)\b'
+    kuwait: '\b(?:kwd|kuwait\w*|knet)\b|\b(?:و|ب|ل|ف|ك|ال|بال|وال|لل|فال)?(?:الكويت|كويت\w*|دينار)\b'
 
 viz:
   colors: {tabby: "#2a78d6", tamara: "#eb6834"}   # validated for color-vision deficiency
@@ -195,6 +208,7 @@ viz:
   muted: "#52514e"
   grid: "#e1e0d9"
   baseline: "#c3c2b7"
+  reference_line: "#898781"
 
 paths:
   raw: "data/raw"

@@ -7,8 +7,11 @@ Data caveats:
 
 - ``review_date`` is the date of the latest version of a review; edited
   reviews carry the edit date.
-- ``reply_date`` is the date of the latest version of the developer reply, so
-  response times are upper bounds.
+- ``reply_date`` is the date of the latest version of the developer reply.
+  A response time can therefore be longer than the time to the first reply
+  (the reply was edited later) or shorter (the review was edited before the
+  reply). Replies dated before the review are excluded and counted.
+- Times are in UTC.
 """
 
 from __future__ import annotations
@@ -37,14 +40,15 @@ def load_clean(source: str | None = "google_play") -> pd.DataFrame:
             ``None`` for both.
 
     Returns:
-        DataFrame with added ``month`` (timezone-naive month start),
-        ``sentiment`` (from star rating) and ``reply_hours``.
+        DataFrame with added ``month`` (timezone-naive month start, UTC),
+        ``year``, ``sentiment`` (from star rating) and ``reply_hours``.
     """
     df = pd.read_parquet(get_path("reviews_clean"))
     if source is not None:
         df = df[df["source"] == source].copy()
     star_map = {int(k): v for k, v in load_config()["labels"]["star_to_sentiment"].items()}
-    df["month"] = df["review_date"].dt.tz_localize(None).dt.to_period("M").dt.to_timestamp()
+    df["month"] = df["review_date"].dt.tz_convert("UTC").dt.tz_localize(None).dt.to_period("M").dt.to_timestamp()
+    df["year"] = df["month"].dt.year
     df["sentiment"] = pd.Categorical(df["rating"].astype(int).map(star_map), SENTIMENT_ORDER)
     df["reply_hours"] = (df["reply_date"] - df["review_date"]).dt.total_seconds() / 3600
     return df.reset_index(drop=True)
@@ -216,29 +220,153 @@ def reply_by_year(df: pd.DataFrame) -> pd.DataFrame:
     return df.groupby([year, "app"])["has_reply"].mean().unstack("app")
 
 
-def reply_time(df: pd.DataFrame) -> pd.DataFrame:
-    """Summarize developer response time in hours per app.
+def reply_time(df: pd.DataFrame, by: str | list[str] = "app") -> pd.DataFrame:
+    """Summarize developer response time in hours.
 
-    Replies dated before the review (possible after a review edit) are excluded.
+    Replies dated before the review (possible when the review was edited after
+    the reply) are excluded from the time statistics and counted separately.
 
     Args:
-        df: Output of :func:`load_clean`.
+        df: Output of :func:`load_clean`, possibly filtered (e.g. to 1-2 star
+            reviews).
+        by: Grouping column(s), e.g. ``"app"`` or ``["year", "app"]``.
 
     Returns:
-        Table indexed by app with reply count, median, 75th and 90th
-        percentile hours, and share answered within 24 hours.
+        Table with the number of replies, the number and share excluded,
+        median, 75th and 90th percentile hours, and the share answered within
+        24 hours.
     """
-    replied = df[df["has_reply"] & (df["reply_hours"] >= 0)]
-    g = replied.groupby("app")["reply_hours"]
-    return pd.DataFrame(
+    replied = df[df["has_reply"]].assign(before_review=lambda d: d["reply_hours"] < 0)
+    valid = replied[~replied["before_review"]]
+    g = valid.groupby(by)["reply_hours"]
+    out = pd.DataFrame(
         {
-            "replied": g.size(),
+            "replied": replied.groupby(by).size(),
+            "excluded": replied.groupby(by)["before_review"].sum(),
             "median_h": g.median().round(1),
             "p75_h": g.quantile(0.75).round(1),
             "p90_h": g.quantile(0.90).round(1),
             "within_24h": g.apply(lambda s: (s <= 24).mean()).round(3),
         }
     )
+    out["excluded_share"] = (out["excluded"] / out["replied"]).round(3)
+    return out
+
+
+def mentions(df: pd.DataFrame, phrase: str) -> pd.Series:
+    """Flag reviews that mention a configured complaint phrase.
+
+    Args:
+        df: Output of :func:`load_clean`.
+        phrase: Key under ``eda.complaint_phrases``.
+
+    Returns:
+        Boolean Series aligned to ``df``.
+    """
+    pattern = load_config()["eda"]["complaint_phrases"][phrase]
+    return df["text_norm"].str.contains(pattern, regex=True)
+
+
+def phrase_share(df: pd.DataFrame, sentiment: str = "negative") -> pd.DataFrame:
+    """Compute the share of reviews that mention each complaint phrase.
+
+    Args:
+        df: Output of :func:`load_clean`.
+        sentiment: Sentiment group to count within.
+
+    Returns:
+        Table indexed by phrase key with one column per app (share of that
+        app's reviews in the group).
+    """
+    group = df[df["sentiment"] == sentiment]
+    phrases = load_config()["eda"]["complaint_phrases"]
+    return pd.DataFrame(
+        {key: mentions(group, key).groupby(group["app"]).mean() for key in phrases}
+    ).T
+
+
+def country_mentions(df: pd.DataFrame, by: str | list[str] = "lang") -> pd.DataFrame:
+    """Count reviews that name a country, city or currency, and which country.
+
+    Markers (place names and currencies) are listed under
+    ``eda.country_markers``. Only a small share of reviews contain one, so the
+    result indicates where reviewers are rather than measuring it.
+
+    Args:
+        df: Output of :func:`load_clean`.
+        by: Grouping column(s).
+
+    Returns:
+        Table with the number of reviews, the number and share with any
+        marker, and, among reviews with a marker, the share mentioning each
+        country (a review can mention several).
+    """
+    markers = load_config()["eda"]["country_markers"]
+    countries = list(markers)
+    flagged = df.assign(
+        **{country: df["text_norm"].str.contains(pattern, regex=True) for country, pattern in markers.items()}
+    )
+    flagged["any_marker"] = flagged[countries].any(axis=1)
+    out = flagged.groupby(by).agg(reviews=("review_id", "size"), with_marker=("any_marker", "sum"))
+    out["marker_share"] = (out["with_marker"] / out["reviews"]).round(4)
+    shares = flagged[flagged["any_marker"]].groupby(by)[countries].mean().round(3)
+    return out.join(shares)
+
+
+def source_language_share(df: pd.DataFrame) -> pd.DataFrame:
+    """Compare the Arabic share of Google Play and App Store reviews over the same dates.
+
+    For each app, the window starts at the earliest App Store review in the
+    data. Only reviews with words (Arabic, English or mixed) are counted.
+
+    Args:
+        df: Output of :func:`load_clean` with ``source=None``.
+
+    Returns:
+        One row per app and source with the window start, review count and
+        Arabic share.
+    """
+    words = df[df["lang"].isin(["arabic", "english", "mixed"])]
+    rows = []
+    for app, group in words.groupby("app"):
+        start = group.loc[group["source"] == "app_store_rss", "review_date"].min()
+        window = group[group["review_date"] >= start]
+        for source, part in window.groupby("source"):
+            rows.append({
+                "app": app, "source": source, "since": start.strftime("%Y-%m-%d"),
+                "reviews": len(part), "arabic_share": round((part["lang"] == "arabic").mean(), 3),
+            })
+    return pd.DataFrame(rows).set_index(["app", "source"])
+
+
+def version_summary(
+    df: pd.DataFrame, app: str, start: str, end: str, min_reviews: int = 15,
+) -> pd.DataFrame:
+    """Summarize reviews per app version within a date range.
+
+    Args:
+        df: Output of :func:`load_clean`.
+        app: App key.
+        start: First review date to include (inclusive).
+        end: Last review date (exclusive).
+        min_reviews: Versions with fewer reviews in the range are left out.
+
+    Returns:
+        One row per app version, ordered by first review, with review count,
+        positive share, number of negative reviews and first and last review dates.
+    """
+    rows = df[(df["app"] == app) & (df["review_date"] >= start) & (df["review_date"] < end)]
+    g = rows.groupby("app_version")
+    out = pd.DataFrame(
+        {
+            "reviews": g.size(),
+            "positive_share": g["sentiment"].apply(lambda s: (s == "positive").mean()).round(2),
+            "negative": g["sentiment"].apply(lambda s: int((s == "negative").sum())),
+            "first": g["review_date"].min().dt.strftime("%Y-%m-%d"),
+            "last": g["review_date"].max().dt.strftime("%Y-%m-%d"),
+        }
+    )
+    return out[out["reviews"] >= min_reviews].sort_values("first")
 
 
 def stopwords_for(script: str) -> frozenset[str]:
@@ -302,7 +430,12 @@ def distinctive_terms(
     """Rank n-grams by how strongly they distinguish negative from positive reviews.
 
     Uses the weighted log-odds ratio with an informative Dirichlet prior
-    (Monroe, Colaresi & Quinn, 2008), with document frequencies as counts.
+    (Monroe, Colaresi & Quinn, 2008), with three adaptations: counts are
+    document frequencies (reviews containing the n-gram); group totals are
+    sums over the n-grams kept by ``min_count``; and the prior is weak
+    (``eda.log_odds_prior`` of the background counts), so the ranking is close
+    to a smoothed log-odds ratio. The ranking measures how distinctive a
+    phrase is, not how often it occurs (see :func:`phrase_share`).
 
     Args:
         df: Output of :func:`load_clean`.
