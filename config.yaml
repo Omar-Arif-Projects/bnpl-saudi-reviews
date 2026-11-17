@@ -128,6 +128,7 @@ gold:
   languages: ["arabic", "english"]
   star_group_shares: {negative: 0.40, neutral: 0.25, positive: 0.35}
   id_hash_length: 12         # characters of the SHA-256 review-ID hash kept as gold_id
+  relabel_n: 50              # rows labeled a second time, blind, to measure consistency
 
 models:
   # Training data: trainable Google Play reviews in these languages, gold set
@@ -192,6 +193,7 @@ paths:
   processed: "data/processed"
   labeled: "data/labeled"
   gold: "data/labeled/gold.csv"
+  gold_relabel: "data/labeled/gold_relabel.csv"
   play_state: "data/raw/play_state.json"
   models: "models"
   dev_predictions: "data/processed/dev_predictions.parquet"

@@ -103,3 +103,59 @@ def test_labeler_saves_and_advances(tmp_path: Path) -> None:
     assert saved.loc[0, ["sentiment", "topic"]].tolist() == ["positive", "ease_of_use"]
     assert saved.loc[1, "flag"] == "unclear"
     assert labeler.pos == 2
+
+
+def test_labelers_keep_each_others_rows(tmp_path: Path) -> None:
+    pytest.importorskip("ipywidgets")
+    from src.label.widget import GoldLabeler
+
+    path = tmp_path / "gold.csv"
+    save_gold(draw_sample(candidate_pool(make_clean()), seed=1), path)
+    first, second = GoldLabeler(path), GoldLabeler(path)
+    first.topic.value = "general"
+    first.label(sentiment="positive")              # row 0
+    second.move(5)
+    second.topic.value = "customer_service"
+    second.label(sentiment="negative")             # row 5, from a table loaded before row 0 was saved
+    saved = load_gold(path)
+    assert saved.loc[0, "sentiment"] == "positive"
+    assert saved.loc[5, "sentiment"] == "negative"
+
+
+def test_labeler_shows_failed_save(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("ipywidgets")
+    from src.label import widget
+
+    path = tmp_path / "gold.csv"
+    save_gold(draw_sample(candidate_pool(make_clean()), seed=1), path)
+    labeler = widget.GoldLabeler(path)
+
+    def locked(*args: object, **kwargs: object) -> None:
+        raise PermissionError("file is locked")
+
+    monkeypatch.setattr(widget, "save_gold", locked)
+    labeler.topic.value = "general"
+    labeler.label(sentiment="positive")
+    assert "Not saved" in labeler.message.value
+    assert labeler.pos == 0
+    assert not is_done(load_gold(path)).any()
+
+
+def test_relabel_sample_needs_complete_labels(tmp_path: Path) -> None:
+    from src.label.gold import create_relabel_sample
+
+    gold_path, out_path = tmp_path / "gold.csv", tmp_path / "relabel.csv"
+    sample = draw_sample(candidate_pool(make_clean()), seed=1)
+    save_gold(sample, gold_path)
+    with pytest.raises(RuntimeError):
+        create_relabel_sample(gold_path, out_path)
+
+    sample[["sentiment", "topic"]] = ["positive", "general"]
+    sample.loc[0, "flag"] = "unclear"
+    save_gold(sample, gold_path)
+    relabel = create_relabel_sample(gold_path, out_path)
+    assert len(relabel) == 50
+    assert (load_gold(out_path)[["sentiment", "topic", "flag"]] == "").all().all()
+    assert sample.loc[0, "gold_id"] not in set(relabel["gold_id"])
+    with pytest.raises(FileExistsError):
+        create_relabel_sample(gold_path, out_path)

@@ -6,10 +6,16 @@ row with the selected topic and moves to the next unlabeled review; flag
 buttons save the row as flagged. Every change is written to disk at once, so
 labeling can stop and resume at any point.
 
+Saving re-reads the file and writes only the current row's labels, so a
+second open labeler does not overwrite labels saved by the first. If a save
+fails (for example while a sync client locks the file), the error is shown
+and the widget stays on the row so the label can be saved again.
+
 Usage in a notebook::
 
     from src.label.widget import GoldLabeler
-    GoldLabeler().show()
+    GoldLabeler().show()                                  # gold set
+    GoldLabeler(get_path("gold_relabel")).show()          # relabel sample
 """
 
 from __future__ import annotations
@@ -20,27 +26,29 @@ from pathlib import Path
 import ipywidgets as w
 from IPython.display import display
 
-from src.config import load_config
-from src.label.gold import is_done, load_gold, save_gold
+from src.config import get_path, load_config
+from src.label.gold import LABEL_COLUMNS, is_done, load_gold, save_gold
 
 TEXT_STYLE = (
     "font-size:18px; line-height:1.7; padding:12px 16px; border:1px solid #c3c2b7;"
     "border-radius:6px; background:#fcfcfb; color:#0b0b0b; white-space:pre-wrap; min-height:60px;"
 )
+ERROR_STYLE = "color:#b42318"
 SENTIMENT_STYLE = {"negative": "danger", "neutral": "warning", "positive": "success"}
 
 
 class GoldLabeler:
-    """Interactive labeler bound to the gold CSV file.
-
-    Args:
-        path: Gold CSV; defaults to ``paths.gold``.
-    """
+    """Interactive labeler bound to a gold-format CSV file."""
 
     def __init__(self, path: Path | None = None) -> None:
+        """Load the file, build the widgets and show the first unlabeled row.
+
+        Args:
+            path: Gold-format CSV; defaults to ``paths.gold``.
+        """
         labels = load_config()["labels"]
-        self.path = path
-        self.df = load_gold(path)
+        self.path = path or get_path("gold")
+        self.df = load_gold(self.path)
         self.classes: list[str] = labels["sentiment_classes"]
         self.flags: list[str] = labels["flags"]
         topics: dict[str, str] = labels["topics"]
@@ -85,6 +93,32 @@ class GoldLabeler:
                 return i
         return min(start, len(self.df) - 1)
 
+    def _save_row(self, values: list[str]) -> bool:
+        """Write the current row's labels to disk, keeping other rows as saved.
+
+        The file is re-read first, so labels saved by another labeler are kept.
+        On success the in-memory table is replaced by the saved file.
+
+        Args:
+            values: New values for :data:`LABEL_COLUMNS`, in that order.
+
+        Returns:
+            True if the row was saved; False if saving failed (the error is shown).
+        """
+        gid = self.df.iloc[self.pos]["gold_id"]
+        try:
+            fresh = load_gold(self.path)
+            fresh.loc[fresh["gold_id"] == gid, LABEL_COLUMNS] = values
+            save_gold(fresh, self.path)
+            self.df = load_gold(self.path)
+        except Exception as exc:  # e.g. the file is locked by another program
+            self.message.value = (
+                f'<span style="{ERROR_STYLE}">Not saved: {html.escape(str(exc))}. '
+                "Click the button again to retry.</span>"
+            )
+            return False
+        return True
+
     def render(self) -> None:
         """Display the current row and progress."""
         row = self.df.iloc[self.pos]
@@ -110,12 +144,10 @@ class GoldLabeler:
         """
         topic = self.topic.value or ""
         if sentiment and not topic:
-            self.message.value = '<span style="color:#b42318">Choose a topic first.</span>'
+            self.message.value = f'<span style="{ERROR_STYLE}">Choose a topic first.</span>'
             return
-        self.df.loc[self.df.index[self.pos], ["sentiment", "topic", "flag"]] = [sentiment, topic, flag]
-        save_gold(self.df, self.path)
-        if flag == "personal_info":
-            self.df.loc[self.df.index[self.pos], "text"] = ""
+        if not self._save_row([sentiment, topic, flag]):
+            return
         if is_done(self.df).all():
             self.render()
             self.message.value = "<b>All reviews are labeled.</b>"
@@ -126,9 +158,8 @@ class GoldLabeler:
 
     def clear(self) -> None:
         """Remove the labels of the current row."""
-        self.df.loc[self.df.index[self.pos], ["sentiment", "topic", "flag"]] = ["", "", ""]
-        save_gold(self.df, self.path)
-        self.render()
+        if self._save_row(["", "", ""]):
+            self.render()
 
     def move(self, step: int) -> None:
         """Move to another row without saving.

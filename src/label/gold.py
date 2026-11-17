@@ -20,10 +20,16 @@ sentiment, topic, flag``
 ``sentiment``, ``topic`` and ``flag`` are empty until labeled. ``rating`` and
 ``star_sentiment`` are kept for analysis but hidden in the labeling tool.
 
+Consistency check: once every row is labeled, ``--relabel`` copies a random
+set of usable rows, with empty labels, to ``paths.gold_relabel``. Labeling
+them again without seeing the first labels gives the agreement reported by
+:mod:`src.models.evaluate`.
+
 Usage::
 
     python -m src.label.gold --sample          # create the unlabeled sample
     python -m src.label.gold --sample --force  # replace it, discarding labels
+    python -m src.label.gold --relabel         # create the relabel sample
     python -m src.label.gold                   # print labeling progress
 """
 
@@ -57,7 +63,7 @@ LONG_NUMBER = re.compile(r"\+?\d(?:[\s-]?\d){6,}")
 
 
 def gold_id(review_id: str, length: int | None = None) -> str:
-    """Return the anonymized identifier of a review.
+    """Return the hashed identifier of a review.
 
     Args:
         review_id: Original review ID.
@@ -283,14 +289,49 @@ def create_sample(force: bool = False) -> pd.DataFrame:
     return sample
 
 
+def create_relabel_sample(gold_path: Path | None = None, out_path: Path | None = None) -> pd.DataFrame:
+    """Copy a random set of usable gold rows, with empty labels, for a second labeling.
+
+    Args:
+        gold_path: Gold CSV; defaults to ``paths.gold``.
+        out_path: Output CSV; defaults to ``paths.gold_relabel``.
+
+    Returns:
+        The saved relabel sample (``gold.relabel_n`` rows, or all usable rows
+        if there are fewer), in random order.
+
+    Raises:
+        RuntimeError: If some gold rows are not labeled yet.
+        FileExistsError: If the relabel file already exists.
+    """
+    out_path = out_path or get_path("gold_relabel")
+    if out_path.exists():
+        raise FileExistsError(f"{out_path} exists; delete it to draw a new relabel sample")
+    gold = load_gold(gold_path)
+    if not is_done(gold).all():
+        raise RuntimeError(f"{int((~is_done(gold)).sum())} gold rows are not labeled yet")
+    cfg = load_config()
+    pool = usable(gold)
+    sample = pool.sample(n=min(cfg["gold"]["relabel_n"], len(pool)), random_state=cfg["project"]["random_seed"])
+    for col in LABEL_COLUMNS:
+        sample[col] = ""
+    sample = sample.reset_index(drop=True)
+    save_gold(sample, out_path)
+    logger.info("Saved %d rows for relabeling -> %s", len(sample), out_path)
+    return sample
+
+
 def main() -> None:
     """Command-line entry point."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--sample", action="store_true", help="create the unlabeled sample")
     parser.add_argument("--force", action="store_true", help="replace an existing gold file")
+    parser.add_argument("--relabel", action="store_true", help="create the relabel sample")
     args = parser.parse_args()
     if args.sample:
         create_sample(force=args.force)
+    elif args.relabel:
+        create_relabel_sample()
     else:
         print(progress(load_gold()).to_string())
 
