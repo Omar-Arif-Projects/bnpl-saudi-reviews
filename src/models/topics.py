@@ -31,8 +31,11 @@ Outputs:
   and the cluster-to-topic map.
 - ``paths.topic_clusters``: one row per cluster with size, keywords, topic.
 - ``paths.topic_shares``: topic shares per star group, app and language.
-- ``paths.topic_quarterly``: topic counts per star group, app and quarter.
+- ``paths.topic_quarterly`` and ``paths.topic_monthly``: topic counts per
+  star group, app and quarter or month.
 - ``paths.topic_eval_gold``: agreement with gold topic labels.
+- ``paths.topic_kappa_gold``: kappa of each method with bootstrap intervals,
+  and the paired difference between the methods.
 - ``paths.topic_methods``: topic shares from clusters, keyword rules and
   gold hand labels.
 - ``paths.figures``/``topics_*.png``: charts.
@@ -505,6 +508,25 @@ def quarterly(reviews: pd.DataFrame, last_date: pd.Timestamp) -> pd.DataFrame:
     return table
 
 
+def monthly(reviews: pd.DataFrame, last_date: pd.Timestamp) -> pd.DataFrame:
+    """Topic counts per star group, app and calendar month.
+
+    Args:
+        reviews: Output of :func:`assign_topics`.
+        last_date: Date of the last review in the data (timezone-naive).
+            A month that ends after it is incomplete and dropped.
+
+    Returns:
+        ``group, app, month, topic, n, total, share``, with ``month`` as
+        text such as ``2026-07``.
+    """
+    df = reviews.assign(period=reviews["month"].dt.to_period("M"))
+    df = df[df["period"].dt.end_time <= last_date]
+    table = share_table(df, ["group", "app", "period"]).rename(columns={"period": "month"})
+    table["month"] = table["month"].astype(str)
+    return table
+
+
 def topic_agreement(hand: pd.Series, pred: pd.Series, min_support: int) -> pd.DataFrame:
     """Compare predicted topics with hand-labeled topics.
 
@@ -546,10 +568,10 @@ def gold_topics(reviews: pd.DataFrame) -> pd.DataFrame:
 
     Returns:
         One row per gold review found in ``reviews``: ``gold_id``, ``app``,
-        ``lang``, ``weight``, ``text``, ``hand`` (hand-labeled topic),
-        ``group``, ``topic`` and ``keyword_topic``.
+        ``lang``, ``stratum``, ``weight``, ``text``, ``hand`` (hand-labeled
+        topic), ``group``, ``topic`` and ``keyword_topic``.
     """
-    gold = usable(load_gold())[["gold_id", "app", "lang", "weight", "text", "topic"]]
+    gold = usable(load_gold())[["gold_id", "app", "lang", "stratum", "weight", "text", "topic"]]
     gold = gold.rename(columns={"topic": "hand"})
     ids = reviews[["review_id", "group", "topic", "keyword_topic"]].assign(
         gold_id=reviews["review_id"].map(gold_id),
@@ -575,6 +597,48 @@ def gold_evaluation(gold: pd.DataFrame, min_support: int = 10) -> pd.DataFrame:
             parts.append(table.assign(method=method, group=group))
     cols = ["method", "group", "topic", "n", "metric", "value"]
     return pd.concat(parts, ignore_index=True)[cols]
+
+
+def kappa_intervals(gold: pd.DataFrame, n_boot: int | None = None) -> pd.DataFrame:
+    """Bootstrap intervals for each method's kappa and for their difference.
+
+    Gold reviews are resampled within their sampling strata, and both
+    methods are scored on the same resamples, so the interval of the
+    difference is paired.
+
+    Args:
+        gold: Output of :func:`gold_topics`.
+        n_boot: Number of resamples; defaults to ``models.bootstrap_samples``.
+
+    Returns:
+        ``group, n, measure, value, ci_low, ci_high`` with ``measure`` one of
+        ``clusters``, ``keywords`` and ``keywords_minus_clusters`` (95%
+        percentile intervals; ``group`` ``all`` for both star groups).
+    """
+    from src.models.evaluate import interval, stratified_resamples
+
+    cfg = load_config()
+    n_boot = n_boot or cfg["models"]["bootstrap_samples"]
+    rows = []
+    for group, part in [("all", gold), *gold.groupby("group")]:
+        hand = part["hand"].to_numpy()
+        preds = {"clusters": part["topic"].to_numpy(), "keywords": part["keyword_topic"].to_numpy()}
+        point = {m: cohen_kappa_score(hand, p) for m, p in preds.items()}
+        boot = {m: np.empty(n_boot) for m in preds}
+        resamples = stratified_resamples(part["stratum"].to_numpy(), n_boot, cfg["project"]["random_seed"])
+        for b, idx in enumerate(resamples):
+            for m, p in preds.items():
+                boot[m][b] = cohen_kappa_score(hand[idx], p[idx])
+        measures = [
+            ("clusters", point["clusters"], boot["clusters"]),
+            ("keywords", point["keywords"], boot["keywords"]),
+            ("keywords_minus_clusters", point["keywords"] - point["clusters"], boot["keywords"] - boot["clusters"]),
+        ]
+        for measure, value, values in measures:
+            low, high = interval(values)
+            rows.append({"group": group, "n": len(part), "measure": measure, "value": float(value),
+                         "ci_low": low, "ci_high": high})
+    return pd.DataFrame(rows)
 
 
 def method_shares(reviews: pd.DataFrame, gold: pd.DataFrame) -> pd.DataFrame:
@@ -722,11 +786,15 @@ def summarize(reviews: pd.DataFrame, terms: dict[str, dict[int, list[tuple[str, 
     shares.to_csv(get_path("topic_shares"), index=False, float_format="%.4f")
     dates = pd.read_parquet(get_path("reviews_clean"), columns=["source", "review_date"])
     last = dates.loc[dates["source"] == load_config()["topics"]["source"], "review_date"].max()
-    table = quarterly(reviews, last.tz_convert("UTC").tz_localize(None))
+    last = last.tz_convert("UTC").tz_localize(None)
+    table = quarterly(reviews, last)
     table.to_csv(get_path("topic_quarterly"), index=False, float_format="%.4f")
+    monthly(reviews, last).to_csv(get_path("topic_monthly"), index=False, float_format="%.4f")
     gold = gold_topics(reviews)
     evaluation = gold_evaluation(gold)
     evaluation.to_csv(get_path("topic_eval_gold"), index=False, float_format="%.4f")
+    kappas = kappa_intervals(gold)
+    kappas.to_csv(get_path("topic_kappa_gold"), index=False, float_format="%.4f")
     method_shares(reviews, gold).to_csv(get_path("topic_methods"), index=False, float_format="%.4f")
     for group in load_config()["topics"]["groups"]:
         topic_map = clusters[clusters["group"] == group].set_index("cluster")["topic"].to_dict()
@@ -738,6 +806,7 @@ def summarize(reviews: pd.DataFrame, terms: dict[str, dict[int, list[tuple[str, 
     overall = shares[(shares["app"] == "all")].pivot(index="topic", columns="group", values="share")
     logger.info("Topic shares:\n%s", overall.round(3).to_string())
     logger.info("Gold check:\n%s", evaluation[evaluation["topic"] == "all"].round(3).to_string())
+    logger.info("Kappa with 95%% bootstrap intervals:\n%s", kappas.round(3).to_string())
     return reviews
 
 

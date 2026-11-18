@@ -1,0 +1,10 @@
+group,n,measure,value,ci_low,ci_high
+all,290,clusters,0.4248,0.3616,0.4912
+all,290,keywords,0.4882,0.4160,0.5543
+all,290,keywords_minus_clusters,0.0634,-0.0018,0.1334
+negative,155,clusters,0.3452,0.2653,0.4253
+negative,155,keywords,0.4880,0.4081,0.5661
+negative,155,keywords_minus_clusters,0.1428,0.0614,0.2305
+positive,135,clusters,0.2486,0.0829,0.4052
+positive,135,keywords,0.1385,-0.0041,0.2895
+positive,135,keywords_minus_clusters,-0.1101,-0.2160,-0.0009

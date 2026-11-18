@@ -9,8 +9,9 @@ import pytest
 from src.clean.normalize import normalize_text
 from src.config import load_config
 from src.models.topics import (
-    GENERAL, OTHER, UNASSIGNED, KeywordMatcher, choose_topic, default_matcher, keyword_topic, method_shares,
-    name_clusters, quarterly, share_table, token_variants, topic_agreement, topic_scores, unique_texts,
+    GENERAL, OTHER, UNASSIGNED, KeywordMatcher, choose_topic, default_matcher, kappa_intervals, keyword_topic,
+    method_shares, monthly, name_clusters, quarterly, share_table, token_variants, topic_agreement, topic_scores,
+    unique_texts,
 )
 
 KEYWORDS = {
@@ -112,6 +113,32 @@ def test_quarterly_drops_incomplete_quarters() -> None:
     table = quarterly(df, pd.Timestamp("2026-11-15"))
     assert sorted(table["quarter"].unique()) == ["2026Q2", "2026Q3"]
     assert table.loc[table["quarter"] == "2026Q2", "n"].tolist() == [2]
+
+
+def test_monthly_drops_incomplete_month() -> None:
+    months = pd.to_datetime(["2026-09-01", "2026-10-01", "2026-10-01", "2026-11-01"])
+    df = pd.DataFrame({"group": "negative", "app": "a", "month": months, "topic": ["x", "x", "y", "y"]})
+    table = monthly(df, pd.Timestamp("2026-11-15"))
+    assert sorted(table["month"].unique()) == ["2026-09", "2026-10"]
+    october = table[table["month"] == "2026-10"].set_index("topic")
+    assert october["n"].tolist() == [1, 1] and october["total"].tolist() == [2, 2]
+
+
+def test_kappa_intervals_are_paired() -> None:
+    rng = np.random.default_rng(0)
+    hand = rng.choice(["a", "b", "c"], size=60)
+    clusters = np.where(rng.random(60) < 0.6, hand, "c")
+    keywords = np.where(rng.random(60) < 0.8, hand, "c")
+    gold = pd.DataFrame({
+        "group": ["negative", "positive"] * 30, "stratum": ["s1", "s2", "s3"] * 20,
+        "hand": hand, "topic": clusters, "keyword_topic": keywords,
+    })
+    table = kappa_intervals(gold, n_boot=200).set_index(["group", "measure"])
+    assert set(table.index.get_level_values("group")) == {"all", "negative", "positive"}
+    assert table.loc[("all", "keywords"), "n"] == 60
+    diff = table.loc[("all", "keywords_minus_clusters")]
+    assert diff["value"] == pytest.approx(table.loc[("all", "keywords"), "value"] - table.loc[("all", "clusters"), "value"])
+    assert diff["ci_low"] <= diff["value"] <= diff["ci_high"]
 
 
 def test_topic_agreement_metrics() -> None:
