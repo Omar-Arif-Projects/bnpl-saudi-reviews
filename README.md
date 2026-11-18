@@ -2,7 +2,7 @@
 
 An analysis of about 184,000 public app-store reviews of **Tabby** and **Tamara**, two Buy Now, Pay Later (BNPL) apps, using Arabic and English NLP. Google Play does not filter reviews by country, so the reviews come from users across the Gulf: Arabic reviews appear to come mostly from Saudi Arabia and English reviews mostly from the UAE.
 
-> **Status:** data collection, cleaning and exploratory analysis are complete. Sentiment models are built and evaluated on a hand-labeled test set, with an error analysis. Topic modeling, the events analysis, an API and a web dashboard are planned (see [Roadmap](#roadmap)).
+> **Status:** data collection, cleaning and exploratory analysis are complete. Sentiment models are built and evaluated on a hand-labeled test set, with an error analysis, and topics are modeled for negative and positive reviews. The events analysis, an API and a web dashboard are planned (see [Roadmap](#roadmap)).
 
 ## Key findings
 
@@ -10,10 +10,11 @@ From 183,341 Google Play reviews (Arabic and English, October 2020 to November 2
 
 - **Who is reviewing.** Of the 0.8% of reviews that name a country, city or currency, Arabic ones point to Saudi Arabia 84% of the time and English ones to the UAE 65% of the time. Tabby's reviews are about half English, Tamara's 60% Arabic.
 - **Ratings are very positive.** 84% of reviews are 5 stars. Positive reviews are short (median 2 words), while 1-star reviews have a median of 12–13 words, so most of the detail about problems is in the negative reviews.
-- **Tamara's review mix changed in February 2026.** Positive reviews fell by about 90% (from about 2,200 to 190 a month), negative reviews by about 37% (from 114 to 72). The average rating dropped from 4.7 to 3.9 mainly because fewer satisfied users reviewed, not because complaints rose. The change lines up with app version 6.0, which suggests the app stopped asking satisfied users for a rating (not confirmed).
-- **Tabby's negative reviews spiked in July–August 2026**, reaching 370 and 561 a month against 137–239 in the other months from October 2025 to October 2026. 85% of the Tabby reviews that mention a blank white screen fall in these two months.
+- **Tamara's review mix changed in February 2026.** Positive reviews fell by about 90% (from about 2,200 to 190 a month), negative reviews by about 37% (from 114 to 72). The average rating dropped from 4.7 to 3.9 mainly because fewer satisfied users reviewed, not because complaints rose. The change lines up with app version 6.0, which suggests the app stopped asking satisfied users for a rating (not confirmed). The negative reviews that disappeared were mostly general-opinion ones (45 → 12 a month); 1–2 star reviews about a specific problem changed little (55 → 50 a month).
+- **Tabby's negative reviews spiked in July–August 2026**, reaching 370 and 561 a month against 137–239 in the other months from October 2025 to October 2026. 85% of the Tabby reviews that mention a blank white screen fall in these two months, and topic modeling puts most of the increase in app bugs and updates: such reviews rose from about 18 a month to 123 in July and 257 in August.
 - **Both companies reply to about 90% of 1–2 star reviews.** The difference in overall reply rate (Tabby 56%, Tamara 11%) comes from Tabby also replying to positive reviews, which it has done since 2024. In 2025–26, Tamara answered 1–2 star reviews in a median of under an hour and Tabby in about 20 hours; in 2022–23 it was the reverse (Tabby 2–5 hours, Tamara 36–39 hours).
 - **Customer service is the most common complaint phrase**, appearing in about 8% of negative reviews for both apps. Phrases typical of negative reviews also point to a blank white screen after app updates (Tabby, 2% of negative reviews) and to late fees and the first payment (Tamara, 1–2% each).
+- **App problems and customer service are the most common specific complaints.** In 155 hand-labeled 1–2 star reviews (weighted to the population mix of apps and languages), app bugs and updates make up 22% (30 reviews) and customer service 15% (25), ahead of payments at 12% (19). Topic modeling shows clear differences between the apps: app bugs are 10% of Tabby's 1–2 star reviews against 3% of Tamara's, and fees and late payment 14% of Tamara's against 6% of Tabby's. It understates app and service complaints overall, though, and simple keyword rules match the hand labels better than BERTopic clusters (Cohen's kappa 0.49 vs. 0.35). Positive reviews are mostly general praise.
 - **A simple model matches the pretrained ones.** On 389 hand-labeled reviews, a TF-IDF baseline trained on star ratings reaches a macro-F1 of 0.73, against 0.77 for a multilingual XLM-RoBERTa model; on Arabic reviews, 0.70 against 0.68 for CAMeLBERT-DA and 0.74 for XLM-RoBERTa. None of the differences is statistically clear. All models separate negative from positive reviews well (0.93–0.98); neutral reviews are the hard part.
 
 ![Positive and negative reviews per month](reports/figures/eda_reviews_by_sentiment.png)
@@ -56,9 +57,11 @@ More charts and tables are in [`notebooks/02_eda.ipynb`](notebooks/02_eda.ipynb)
 
 **Sentiment models.** A TF-IDF baseline (character 2–5-grams and word 1–2-grams, logistic regression) is trained on star labels (1–2 stars negative, 3 neutral, 4–5 positive). Its class weighting was chosen on a held-out dev split of star-labeled reviews: square-root balanced weights reached a dev macro-F1 of 0.60, against 0.57 without weights and 0.54 with fully balanced weights, which predicted neutral for 20% of dev reviews when only 2% are neutral. Two pretrained models are used without further training: CAMeLBERT-DA sentiment (Arabic only) and a multilingual XLM-RoBERTa sentiment model (Arabic and English), each pinned to a fixed revision. Results on the gold set are reported as macro-F1 with stratified bootstrap intervals, population-weighted metrics, a negative-vs-positive view, and paired bootstrap intervals for the difference between models.
 
+**Topic modeling.** 1–2 star and 4–5 star Google Play reviews in Arabic and English are modeled separately with BERTopic. Reviews with the same normalized text are embedded once with a multilingual sentence-transformer (`paraphrase-multilingual-MiniLM-L12-v2`, pinned to a fixed revision) and then counted once per review. UMAP and HDBSCAN group the texts into clusters, and c-TF-IDF on the normalized text (words of letters only, without stop words) gives each cluster's keywords. Unclustered texts join the most similar cluster if the cosine similarity of their embeddings is at least 0.6; the rest stay unassigned. Each cluster is named with one of the gold-set topics by matching its top keywords against keyword lists in `config.yaml`: it gets the specific topic with the largest share of its keyword weight if that share is at least 15%, and otherwise general opinion or other. As a simpler comparison, each review also gets a topic from the keyword lists alone. Both are checked against the hand-labeled topics of the gold set.
+
 **Distinctive phrases.** Words and two-word phrases are ranked with the weighted log-odds ratio with an informative Dirichlet prior (Monroe, Colaresi & Quinn, 2008), comparing 1–2 star with 4–5 star reviews, separately for each app and language. Counts are the number of reviews that contain a phrase, and the prior is weak, so the ranking is close to a smoothed log-odds ratio. It shows which phrases separate negative from positive reviews, not which are most frequent; how often complaint phrases occur is counted separately.
 
-## Model results
+## Sentiment results
 
 Sentiment on the 389 usable gold reviews (hand labels: negative, neutral, positive), with 95% stratified bootstrap intervals. The population-weighted column reweights the sample to the real mix of reviews, in which 5-star reviews dominate. The last column uses only reviews labeled negative or positive and compares each model's negative and positive probabilities.
 
@@ -82,11 +85,42 @@ Sentiment on the 389 usable gold reviews (hand labels: negative, neutral, positi
 
 Full results are in [`reports/sentiment_results_gold.csv`](reports/sentiment_results_gold.csv), with the paired differences in [`reports/sentiment_paired_gold.csv`](reports/sentiment_paired_gold.csv).
 
+## Topic results
+
+![Share of reviews about each specific topic, per app](reports/figures/topics_share.png)
+
+Topic shares in 1–2 star reviews by three methods. The BERTopic and keyword-rule shares cover all 13,226 negative reviews in Arabic and English. The hand-label shares come from the 155 negative gold reviews, weighted to the population mix of apps and languages. Review counts are in brackets.
+
+| Topic | BERTopic clusters | Keyword rules | Hand labels (gold) |
+|---|---|---|---|
+| App bugs & updates | 8.1% (1,070) | 7.8% (1,032) | 21.8% (30) |
+| Customer service | 6.2% (820) | 9.0% (1,195) | 15.0% (25) |
+| Payments, installments & card | 26.3% (3,483) | 20.8% (2,746) | 11.8% (19) |
+| Fees & late payment | 8.2% (1,080) | 5.7% (753) | 5.1% (8) |
+| Rejection & credit limit | 1.2% (155) | 6.9% (909) | 4.8% (6) |
+| Account, login & verification | 4.3% (569) | 6.0% (792) | 4.4% (8) |
+| Ease of use & convenience | 0.3% (36) | 1.0% (132) | 3.3% (5) |
+| Merchants & refunds | 1.5% (195) | 2.2% (291) | 0.9% (1) |
+| General opinion, no specific topic | 30.7% (4,060) | 25.4% (3,356) | 31.5% (51) |
+| Other | 3.8% (503) | 15.3% (2,020) | 1.4% (2) |
+| Not assigned | 9.5% (1,255) | – | – |
+
+- **Clusters capture problems that have their own vocabulary**, such as a blocked card, OTP codes, a white screen after updates, late fees and refunds. Long complaints that touch on several things end up in broad clusters: the largest negative cluster (1,467 reviews) mixes complaints about money and is named payments with only 20% of its keyword weight.
+- **Cluster shares understate app and service complaints and overstate payments.** Against the hand labels, both methods find app problems too rarely (recall 0.32 on the 290 gold reviews with 1–2 or 4–5 stars) and payments too often (precision 0.20 for clusters, 0.33 for keyword rules), because many complaints mention a payment in passing. Arabic refund complaints, for example, mostly land in payments clusters.
+- **Keyword rules alone agree with the hand labels at least as well as the clusters.** Cohen's kappa is 0.49 against 0.42 on all 290 reviews, and 0.49 against 0.35 on negative reviews. On positive reviews, which are nearly all general praise, it is 0.14 against 0.25. The same person labeling 48 reviews twice reached 0.84.
+- **Comparisons between apps and over time are more reliable than levels.** App bugs are a larger share of Tabby's complaints by all three methods (hand labels: 20 of 76 Tabby reviews against 10 of 79 Tamara reviews). Tabby's July–August 2026 spike is mostly app bugs and updates (about 172 of the 282 extra negative reviews a month). Tamara's drop in negative reviews after February 2026 is mostly in general-opinion reviews (45 → 12 a month, against 55 → 50 for reviews with a specific topic).
+- **The keyword lists were revised once, after a first check against the hand labels.** Words seen in the cluster keywords that were missing or too broad were fixed: Arabic negated forms such as لايعمل, "slow", Gulf and misspelled praise words such as زين, two Arabic words for months, and `install*`, which also matched "installment". This renamed 5 negative clusters (367 reviews) and 12 positive clusters (12,163 reviews), mostly from other to general opinion. Kappa changed from 0.41 to 0.42 for the clusters and from 0.47 to 0.49 for the keyword rules. The model settings were not changed.
+
+![Negative reviews per quarter by topic](reports/figures/topics_negative_by_quarter.png)
+
+Topic shares per app and language are in [`reports/topic_shares.csv`](reports/topic_shares.csv), quarterly counts in [`reports/topic_quarterly.csv`](reports/topic_quarterly.csv), clusters and their keywords in [`reports/topic_clusters.csv`](reports/topic_clusters.csv), and the gold check in [`reports/topic_eval_gold.csv`](reports/topic_eval_gold.csv) and [`reports/topic_methods.csv`](reports/topic_methods.csv). Examples and more tables are in [`notebooks/04_topics.ipynb`](notebooks/04_topics.ipynb).
+
 ## Limitations
 
 - App reviews are not a random sample of users. Unhappy users are more likely to write long reviews, and in-app rating prompts affect who reviews; the Tamara change in February 2026 suggests such an effect.
 - Google Play reviews cannot be limited to one country, and few reviews say where the reviewer is.
 - Star ratings are a noisy measure of sentiment: in the gold sample, about a fifth of 1–2 star reviews and about two thirds of 3-star reviews read as positive. Model results are therefore reported on hand labels, which come from one labeler; a blind relabel of 50 reviews measures that person's consistency, not agreement between different labelers.
+- Each review gets one topic, although many mention several things. BERTopic topic shares depend on the keyword lists used to name the clusters and differ from shares estimated from hand labels, which rest on only 155 negative reviews (see [Topic results](#topic-results)).
 - Review dates are the latest edit of a review, and reply dates the latest edit of a reply, so a response time can be longer or shorter than the time to the first reply. Replies dated before the review's latest edit (1.3% for Tabby, 2.7% for Tamara) are excluded.
 - "تمارا" is also a given name, so part of Tamara's search interest is unrelated to the app.
 - There is no access to company transaction data. Results describe what users write, not how the companies perform.
@@ -99,10 +133,10 @@ Full results are in [`reports/sentiment_results_gold.csv`](reports/sentiment_res
 │   ├── collect/             # Google Play, App Store RSS, KAPSARC, Google Trends
 │   ├── clean/               # normalization, language detection, cleaning pipeline
 │   ├── label/               # gold-set sampling and labeling widget
-│   ├── models/              # sentiment baseline, pretrained transformers, evaluation
+│   ├── models/              # sentiment baseline, pretrained transformers, evaluation, topic models
 │   └── analysis/            # EDA tables and chart helpers
-├── notebooks/               # collection checks, EDA, gold-set labeling, sentiment error analysis
-├── reports/                 # cleaning log, model results and figures
+├── notebooks/               # collection checks, EDA, gold-set labeling, sentiment error analysis, topics
+├── reports/                 # cleaning log, model results, topic tables and figures
 ├── data/                    # raw and processed data (not committed), hand-labeled test set, external sources
 └── tests/
 ```
@@ -130,18 +164,21 @@ python -m src.models.baseline                      # train the TF-IDF baseline
 python -m src.models.transformer                   # score with pretrained transformers
 python -m src.models.evaluate                      # metrics on dev and gold sets
 jupyter notebook notebooks/03_sentiment_models.ipynb  # results and error analysis
+python -m src.models.topics                        # topic models, topic shares and figures
+python -m src.models.topics --rename               # re-apply topic names without refitting
+jupyter notebook notebooks/04_topics.ipynb         # topics per app and over time
 
 pytest
 ```
 
-All settings (app IDs, languages, rate limits, paths, cleaning thresholds, model revisions) are in `config.yaml`. On Windows, use a short project path or enable long paths: PyTorch's installation contains deeply nested files that can exceed the 260-character path limit.
+All settings (app IDs, languages, rate limits, paths, cleaning thresholds, model revisions, topic keywords) are in `config.yaml`. On Windows, use a short project path or enable long paths: PyTorch's installation contains deeply nested files that can exceed the 260-character path limit.
 
 ## Roadmap
 
 - [x] Data collection
 - [x] Cleaning, normalization and exploratory analysis
 - [x] Sentiment models: TF-IDF baseline vs. pretrained transformers, evaluated on a hand-labeled test set, with error analysis
-- [ ] Topic modeling of complaints and praise
+- [x] Topic modeling of complaints and praise, checked against hand-labeled topics
 - [ ] Sentiment trends compared with regulation, product and seasonal events
 - [ ] Prediction API (FastAPI)
 - [ ] Web dashboard (Flutter)
